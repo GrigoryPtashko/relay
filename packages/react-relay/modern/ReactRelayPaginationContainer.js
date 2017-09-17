@@ -67,7 +67,12 @@ export type ConnectionConfig = {
   getFragmentVariables?: FragmentVariablesGetter,
   getVariables: (
     props: Object,
-    paginationInfo: {count: number, cursor: ?string},
+    paginationInfo: {
+      count: ?number,
+      cursor: ?string,
+      revCount: ?number,
+      revCursor: ?string,
+    },
     fragmentVariables: Variables,
   ) => Variables,
   query: GraphQLTaggedNode,
@@ -431,6 +436,7 @@ function createContainerWithFragments<
     _buildRelayProp(relay: RelayContext): RelayPaginationProp {
       return {
         hasMore: this._hasMore,
+        revHasMore: this._revHasMore,
         isLoading: this._isLoading,
         loadMore: this._loadMore,
         refetchConnection: this._refetchConnection,
@@ -450,8 +456,10 @@ function createContainerWithFragments<
 
     _getConnectionData(): ?{
       cursor: string,
+      revCursor: ?string,
       edgeCount: number,
       hasMore: boolean,
+      revHasMore: ?boolean,
     } {
       // Extract connection data and verify there are more edges to fetch
       const props = {
@@ -501,12 +509,20 @@ function createContainerWithFragments<
         PAGE_INFO,
         pageInfo,
       );
+
       const hasMore =
         direction === FORWARD
           ? pageInfo[HAS_NEXT_PAGE]
           : pageInfo[HAS_PREV_PAGE];
+      const revHasMore =
+        direction === FORWARD
+          ? pageInfo[HAS_PREV_PAGE]
+          : pageInfo[HAS_NEXT_PAGE];
+
       const cursor =
         direction === FORWARD ? pageInfo[END_CURSOR] : pageInfo[START_CURSOR];
+      const revCursor =
+        direction === FORWARD ? pageInfo[START_CURSOR] : pageInfo[END_CURSOR];
       if (typeof hasMore !== 'boolean' || typeof cursor !== 'string') {
         warning(
           false,
@@ -523,14 +539,21 @@ function createContainerWithFragments<
       }
       return {
         cursor,
+        revCursor,
         edgeCount: edges.length,
         hasMore,
+        revHasMore,
       };
     }
 
     _hasMore = (): boolean => {
       const connectionData = this._getConnectionData();
       return !!connectionData && connectionData.hasMore;
+    };
+
+    _revHasMore = (): boolean => {
+      const connectionData = this._getConnectionData();
+      return !!connectionData && !!connectionData.revHasMore;
     };
 
     _isLoading = (): boolean => {
@@ -544,7 +567,9 @@ function createContainerWithFragments<
     ): ?Disposable => {
       const paginatingVariables = {
         count: totalCount,
+        revCount: null,
         cursor: null,
+        revCursor: null,
         totalCount,
       };
       return this._fetchPage(
@@ -564,22 +589,31 @@ function createContainerWithFragments<
       if (!connectionData) {
         return null;
       }
+      let reverseMore = false;
+      if (pageSize < 0) {
+        pageSize = -1 * pageSize;
+        reverseMore = true;
+      }
       const totalCount = connectionData.edgeCount + pageSize;
       if (options && options.force) {
         return this._refetchConnection(totalCount, callback);
       }
       const paginatingVariables = {
-        count: pageSize,
-        cursor: connectionData.cursor,
-        totalCount,
-      };
+          count: !reverseMore ? pageSize : null,
+          revCount: !reverseMore ? null : pageSize,
+          cursor: !reverseMore ? connectionData.cursor : null,
+          revCursor: !reverseMore ? null : connectionData.revCursor,
+          totalCount,
+        };
       return this._fetchPage(paginatingVariables, callback, options);
     };
 
     _fetchPage(
       paginatingVariables: {
-        count: number,
+        count: ?number,
+        revCount: ?number,
         cursor: ?string,
+        revCursor: ?string,
         totalCount: number,
       },
       callback: ?(error: ?Error) => void,
@@ -606,7 +640,9 @@ function createContainerWithFragments<
         props,
         {
           count: paginatingVariables.count,
+          revCount: paginatingVariables.revCount,
           cursor: paginatingVariables.cursor,
+          revCursor: paginatingVariables.revCursor,
         },
         // Pass the variables used to fetch the fragments initially
         fragmentVariables,
