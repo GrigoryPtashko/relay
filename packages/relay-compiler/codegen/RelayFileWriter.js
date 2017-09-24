@@ -13,35 +13,42 @@
 
 'use strict';
 
-const ASTConvert = require('ASTConvert');
-const CodegenDirectory = require('CodegenDirectory');
-const RelayCompiler = require('RelayCompiler');
-const RelayCompilerContext = require('RelayCompilerContext');
-const RelayFlowGenerator = require('RelayFlowGenerator');
-const RelayValidator = require('RelayValidator');
+const RelayCompiler = require('../RelayCompiler');
+const RelayFlowGenerator = require('../core/RelayFlowGenerator');
+const RelayParser = require('../core/RelayParser');
+const RelayValidator = require('../core/RelayValidator');
 
 const invariant = require('invariant');
 const path = require('path');
-const printFlowTypes = require('printFlowTypes');
-const writeLegacyFlowFile = require('./writeLegacyFlowFile');
 const writeRelayGeneratedFile = require('./writeRelayGeneratedFile');
 
-const {isOperationDefinitionAST} = require('GraphQLSchemaUtils');
-const {generate} = require('RelayCodeGenerator');
+const {generate} = require('../core/RelayCodeGenerator');
+const {
+  ASTConvert,
+  CodegenDirectory,
+  CompilerContext,
+  SchemaUtils,
+} = require('../graphql-compiler/GraphQLCompilerPublic');
 const {Map: ImmutableMap} = require('immutable');
 
-import type {RelayGeneratedNode} from 'RelayCodeGenerator';
-import type {FileWriterInterface} from 'RelayCodegenTypes';
-import type {CompiledNode, CompiledDocumentMap} from 'RelayCompiler';
-import type {CompilerTransforms} from 'RelayCompiler';
+import type {RelayGeneratedNode} from '../core/RelayCodeGenerator';
+import type {ScalarTypeMapping} from '../core/RelayFlowTypeTransformers';
+import type {
+  CompiledNode,
+  CompiledDocumentMap,
+  CompilerTransforms,
+  FileWriterInterface,
+} from '../graphql-compiler/GraphQLCompilerPublic';
+import type {FormatModule} from './writeRelayGeneratedFile';
+// TODO T21875029 ../../relay-runtime/util/RelayConcreteNode
 import type {GeneratedNode} from 'RelayConcreteNode';
-import type {ScalarTypeMapping} from 'RelayFlowGenerator';
 import type {DocumentNode, GraphQLSchema} from 'graphql';
-import type {FormatModule} from 'writeRelayGeneratedFile';
+
+const {isOperationDefinitionAST} = SchemaUtils;
 
 export type GenerateExtraFiles = (
   getOutputDirectory: (path?: string) => CodegenDirectory,
-  compilerContext: RelayCompilerContext,
+  compilerContext: CompilerContext,
   getGeneratedDirectory: (definitionName: string) => CodegenDirectory,
 ) => void;
 
@@ -54,13 +61,10 @@ export type WriterConfig = {
   outputDir?: string,
   persistQuery?: (text: string) => Promise<string>,
   platform?: string,
-  fragmentsWithLegacyFlowTypes?: Set<string>,
   schemaExtensions: Array<string>,
   relayRuntimeModule?: string,
   inputFieldWhiteListForFlow?: Array<string>,
 };
-
-/* eslint-disable no-console-disallow */
 
 class RelayFileWriter implements FileWriterInterface {
   _onlyValidate: boolean;
@@ -141,9 +145,10 @@ class RelayFileWriter implements FileWriterInterface {
       // Verify using local and global rules, can run global verifications here
       // because all files are processed together
       [...RelayValidator.LOCAL_RULES, ...RelayValidator.GLOBAL_RULES],
+      RelayParser.transform.bind(RelayParser),
     );
 
-    const compilerContext = new RelayCompilerContext(extendedSchema);
+    const compilerContext = new CompilerContext(extendedSchema);
     const compiler = new RelayCompiler(
       this._baseSchema,
       compilerContext,
@@ -189,20 +194,6 @@ class RelayFileWriter implements FileWriterInterface {
           if (baseDefinitionNames.has(node.name)) {
             // don't add definitions that were part of base context
             return;
-          }
-          if (
-            this._config.fragmentsWithLegacyFlowTypes &&
-            this._config.fragmentsWithLegacyFlowTypes.has(node.name)
-          ) {
-            const legacyFlowTypes = printFlowTypes(node);
-            if (legacyFlowTypes) {
-              writeLegacyFlowFile(
-                getGeneratedDirectory(node.name),
-                node.name,
-                legacyFlowTypes,
-                this._config.platform,
-              );
-            }
           }
 
           const flowTypes = RelayFlowGenerator.generate(
@@ -268,6 +259,7 @@ class RelayFileWriter implements FileWriterInterface {
     }
 
     const tExtra = Date.now();
+    // eslint-disable-next-line no-console
     console.log(
       'Writer time: %s [%s compiling, %s generating, %s extra]',
       toSeconds(tStart, tExtra),

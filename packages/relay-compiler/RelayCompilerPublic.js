@@ -13,26 +13,36 @@
 
 'use strict';
 
-const RelayCodegenRunner = require('RelayCodegenRunner');
-const RelayCompiler = require('RelayCompiler');
-const RelayConsoleReporter = require('RelayConsoleReporter');
-const RelayFileIRParser = require('RelayFileIRParser');
-const RelayFileWriter = require('RelayFileWriter');
-const RelayIRTransforms = require('RelayIRTransforms');
-const RelayMultiReporter = require('RelayMultiReporter');
+const RelayCompiler = require('./RelayCompiler');
+const RelayFileWriter = require('./codegen/RelayFileWriter');
+const RelayIRTransforms = require('./core/RelayIRTransforms');
+const RelayJSModuleParser = require('./core/RelayJSModuleParser');
 
-const formatGeneratedModule = require('formatGeneratedModule');
+const formatGeneratedModule = require('./codegen/formatGeneratedModule');
 
-export type {CompileResult} from 'RelayCodegenTypes';
-export type {ParserConfig, WriterConfig} from 'RelayCodegenRunner';
+const {
+  CodegenRunner,
+  ConsoleReporter,
+  MultiReporter,
+} = require('./graphql-compiler/GraphQLCompilerPublic');
+
+export type {
+  CompileResult,
+  ParserConfig,
+  WriterConfig,
+} from './graphql-compiler/GraphQLCompilerPublic';
 
 module.exports = {
   Compiler: RelayCompiler,
-  ConsoleReporter: RelayConsoleReporter,
-  FileIRParser: RelayFileIRParser,
+  ConsoleReporter,
+
+  /** @deprecated Use JSModuleParser. */
+  FileIRParser: RelayJSModuleParser,
+
   FileWriter: RelayFileWriter,
   IRTransforms: RelayIRTransforms,
-  MultiReporter: RelayMultiReporter,
-  Runner: RelayCodegenRunner,
+  JSModuleParser: RelayJSModuleParser,
+  MultiReporter,
+  Runner: CodegenRunner,
   formatGeneratedModule,
 };

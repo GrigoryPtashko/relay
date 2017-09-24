@@ -12,8 +12,8 @@
 
 'use strict';
 
+const GraphQLCompilerContext = require('GraphQLCompilerContext');
 const RelayCodeGenerator = require('RelayCodeGenerator');
-const RelayCompilerContext = require('RelayCompilerContext');
 const RelayTestSchema = require('RelayTestSchema');
 
 const getGoldenMatchers = require('getGoldenMatchers');
@@ -28,7 +28,7 @@ describe('RelayCodeGenerator', () => {
   it('matches expected output', () => {
     expect('fixtures/code-generator').toMatchGolden(text => {
       const {definitions} = parseGraphQLText(RelayTestSchema, text);
-      const context = new RelayCompilerContext(RelayTestSchema).addAll(
+      const context = new GraphQLCompilerContext(RelayTestSchema).addAll(
         definitions,
       );
       return context

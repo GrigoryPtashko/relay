@@ -16,13 +16,14 @@
 const isPromise = require('isPromise');
 
 import type {Disposable} from 'RelayCombinedEnvironmentTypes';
-import type {Observer as LegacyObserver} from 'RelayStoreTypes';
+import type {LegacyObserver} from 'RelayNetworkTypes';
 
 export type Subscription = {
   unsubscribe: () => void,
+  +closed: boolean,
 };
 
-type Observer<T> = {
+export type Observer<T> = {
   start?: ?(Subscription) => mixed,
   next?: ?(T) => mixed,
   error?: ?(Error) => mixed,
@@ -32,8 +33,9 @@ type Observer<T> = {
 
 type Sink<T> = {|
   +next: T => void,
-  +error: Error => void,
+  +error: (Error, isUncaughtThrownError?: boolean) => void,
   +complete: () => void,
+  +closed: boolean,
 |};
 
 type Source_<T, SinkOfT: Sink<T>> = SinkOfT =>
@@ -48,13 +50,9 @@ export interface Subscribable<T> {
 
 // Note: This should accept Subscribable<T> instead of RelayObservable<T>,
 // however Flow cannot yet distinguish it from T.
-export type ObservableFromValue<T> =
-  | RelayObservable<T>
-  | Promise<T>
-  | Error
-  | T;
+export type ObservableFromValue<T> = RelayObservable<T> | Promise<T> | T;
 
-let hostReportError;
+let hostReportError = swallowError;
 
 /**
  * Limited implementation of ESObservable, providing the limited set of behavior
@@ -81,18 +79,33 @@ class RelayObservable<T> implements Subscribable<T> {
   }
 
   /**
-   * When an unhandled error is detected, it is reported to the host environment
-   * (the ESObservable spec refers to this method as "HostReportErrors()").
+   * When an emitted error event is not handled by an Observer, it is reported
+   * to the host environment (what the ESObservable spec refers to as
+   * "HostReportErrors()").
    *
-   * The default implementation in development builds re-throws errors in a
-   * separate frame, and from production builds does nothing (swallowing
-   * uncaught errors).
+   * The default implementation in development rethrows thrown errors, and
+   * logs emitted error events to the console, while in production does nothing
+   * (swallowing unhandled errors).
    *
    * Called during application initialization, this method allows
-   * application-specific handling of uncaught errors. Allowing, for example,
+   * application-specific handling of unhandled errors. Allowing, for example,
    * integration with error logging or developer tools.
+   *
+   * A second parameter `isUncaughtThrownError` is true when the unhandled error
+   * was thrown within an Observer handler, and false when the unhandled error
+   * was an unhandled emitted event.
+   *
+   *  - Uncaught thrown errors typically represent avoidable errors thrown from
+   *    application code, which should be handled with a try/catch block, and
+   *    usually have useful stack traces.
+   *
+   *  - Unhandled emitted event errors typically represent unavoidable events in
+   *    application flow such as network failure, and may not have useful
+   *    stack traces.
    */
-  static onUnhandledError(callback: Error => mixed): void {
+  static onUnhandledError(
+    callback: (Error, isUncaughtThrownError: boolean) => mixed,
+  ): void {
     hostReportError = callback;
   }
 
@@ -103,9 +116,7 @@ class RelayObservable<T> implements Subscribable<T> {
   static from<V>(obj: ObservableFromValue<V>): RelayObservable<V> {
     return isObservable(obj)
       ? fromObservable(obj)
-      : isPromise(obj)
-        ? fromPromise(obj)
-        : obj instanceof Error ? fromError(obj) : fromValue(obj);
+      : isPromise(obj) ? fromPromise(obj) : fromValue(obj);
   }
 
   /**
@@ -157,7 +168,7 @@ class RelayObservable<T> implements Subscribable<T> {
               error: sink.error,
             });
           } catch (error2) {
-            sink.error(error2);
+            sink.error(error2, true /* isUncaughtThrownError */);
           }
         },
       });
@@ -171,7 +182,7 @@ class RelayObservable<T> implements Subscribable<T> {
    * for all events emitted by the source.
    *
    * Any errors that are thrown in the side-effect Observer are unhandled, and
-   * do not effect the source Observable or its Observer.
+   * do not affect the source Observable or its Observer.
    *
    * This is useful for when debugging your Observables or performing other
    * side-effects such as logging or performance monitoring.
@@ -183,7 +194,7 @@ class RelayObservable<T> implements Subscribable<T> {
           try {
             observer[action] && observer[action].apply(observer, arguments);
           } catch (error) {
-            handleError(error);
+            hostReportError(error, true /* isUncaughtThrownError */);
           }
           sink[action] && sink[action].apply(sink, arguments);
         };
@@ -194,6 +205,23 @@ class RelayObservable<T> implements Subscribable<T> {
         complete: both('complete'),
         unsubscribe: both('unsubscribe'),
       });
+    });
+  }
+
+  /**
+   * Returns a new Observable which returns the same values as this one, but
+   * modified so that the finally callback is performed after completion,
+   * whether normal or due to error or unsubscription.
+   *
+   * This is useful for cleanup such as resource finalization.
+   */
+  finally(fn: () => mixed): RelayObservable<T> {
+    return new RelayObservable(sink => {
+      const subscription = this.subscribe(sink);
+      return () => {
+        subscription.unsubscribe();
+        fn();
+      };
     });
   }
 
@@ -265,68 +293,53 @@ class RelayObservable<T> implements Subscribable<T> {
    * the mapping function.
    */
   map<U>(fn: T => U): RelayObservable<U> {
-    return this.concatMap(value => fromValue(fn(value)));
+    return this.mergeMap(value => fromValue(fn(value)));
   }
 
   /**
    * Returns a new Observable where each value is replaced with a new Observable
    * by the mapping function, the results of which returned as a single
-   * concattenated Observable.
+   * merged Observable.
    */
-  concatMap<U>(fn: T => ObservableFromValue<U>): RelayObservable<U> {
+  mergeMap<U>(fn: T => ObservableFromValue<U>): RelayObservable<U> {
     return new RelayObservable(sink => {
-      let hasCompleted = false;
-      let outer;
-      let inner;
-      const buffer = [];
+      const subscriptions = [];
 
-      function next(value) {
-        if (inner) {
-          buffer.push(value);
-        } else {
-          try {
-            RelayObservable.from(fn(value)).subscribe({
-              start: sub => {
-                inner = sub;
-              },
-              next: sink.next,
-              error: sink.error,
-              complete() {
-                inner = undefined;
-                if (buffer.length !== 0) {
-                  next(buffer.shift());
-                } else if (hasCompleted) {
-                  sink.complete();
-                }
-              },
-            });
-          } catch (error) {
-            sink.error(error);
-          }
+      function start(subscription) {
+        this._sub = subscription;
+        subscriptions.push(subscription);
+      }
+
+      function complete() {
+        subscriptions.splice(subscriptions.indexOf(this._sub), 1);
+        if (subscriptions.length === 0) {
+          sink.complete();
         }
       }
 
       this.subscribe({
-        start: sub => {
-          outer = sub;
-        },
-        next,
-        error: sink.error,
-        complete() {
-          hasCompleted = true;
-          if (!inner) {
-            sink.complete();
+        start,
+        next(value) {
+          try {
+            if (!sink.closed) {
+              RelayObservable.from(fn(value)).subscribe({
+                start,
+                next: sink.next,
+                error: sink.error,
+                complete,
+              });
+            }
+          } catch (error) {
+            sink.error(error, true /* isUncaughtThrownError */);
           }
         },
+        error: sink.error,
+        complete,
       });
 
       return () => {
-        if (inner) {
-          inner.unsubscribe();
-          inner = undefined;
-        }
-        outer.unsubscribe();
-        buffer.length = 0;
+        subscriptions.forEach(sub => sub.unsubscribe());
+        subscriptions.length = 0;
       };
     });
   }
@@ -393,7 +406,7 @@ class RelayObservable<T> implements Subscribable<T> {
 declare function isObservable(p: mixed): boolean %checks(p instanceof
   RelayObservable);
 
-// eslint-disable-next-line no-redeclare
+// prettier-ignore
 function isObservable(obj) {
   return (
     typeof obj === 'object' &&
@@ -425,19 +438,16 @@ function fromValue<T>(value: T): RelayObservable<T> {
   });
 }
 
-function fromError(error: Error): RelayObservable<any> {
-  return new RelayObservable(sink => {
-    sink.error(error);
-  });
-}
-
-function handleError(error: Error): void {
-  hostReportError && hostReportError(error);
-}
-
 function subscribe<T>(source: Source<T>, observer: Observer<T>): Subscription {
   let closed = false;
   let cleanup;
+
+  // Ideally we would simply describe a `get closed()` method on the Sink and
+  // Subscription objects below, however not all flow environments we expect
+  // Relay to be used within will support property getters, and many minifier
+  // tools still do not support ES5 syntax. Instead, we can use defineProperty.
+  const withClosed: <O>(obj: O) => {|...O, +closed: boolean|} = (obj =>
+    Object.defineProperty(obj, 'closed', ({get: () => closed}: any)): any);
 
   function doCleanup() {
     if (cleanup) {
@@ -447,7 +457,7 @@ function subscribe<T>(source: Source<T>, observer: Observer<T>): Subscription {
         try {
           cleanup();
         } catch (error) {
-          handleError(error);
+          hostReportError(error, true /* isUncaughtThrownError */);
         }
       }
       cleanup = undefined;
@@ -455,7 +465,7 @@ function subscribe<T>(source: Source<T>, observer: Observer<T>): Subscription {
   }
 
   // Create a Subscription.
-  const subscription: Subscription = {
+  const subscription: Subscription = withClosed({
     unsubscribe() {
       if (!closed) {
         closed = true;
@@ -464,19 +474,19 @@ function subscribe<T>(source: Source<T>, observer: Observer<T>): Subscription {
         try {
           observer.unsubscribe && observer.unsubscribe(subscription);
         } catch (error) {
-          handleError(error);
+          hostReportError(error, true /* isUncaughtThrownError */);
         } finally {
           doCleanup();
         }
       }
     },
-  };
+  });
 
   // Tell Observer that observation is about to begin.
   try {
     observer.start && observer.start(subscription);
   } catch (error) {
-    handleError(error);
+    hostReportError(error, true /* isUncaughtThrownError */);
   }
 
   // If closed already, don't bother creating a Sink.
@@ -485,30 +495,30 @@ function subscribe<T>(source: Source<T>, observer: Observer<T>): Subscription {
   }
 
   // Create a Sink respecting subscription state and cleanup.
-  const sink: Sink<T> = {
+  const sink: Sink<T> = withClosed({
     next(value) {
       if (!closed && observer.next) {
         try {
           observer.next(value);
         } catch (error) {
-          handleError(error);
+          hostReportError(error, true /* isUncaughtThrownError */);
         }
       }
     },
-    error(error) {
-      try {
-        if (closed) {
-          throw error;
-        }
+    error(error, isUncaughtThrownError) {
+      if (closed || !observer.error) {
         closed = true;
-        if (!observer.error) {
-          throw error;
-        }
-        observer.error(error);
-      } catch (error2) {
-        handleError(error2);
-      } finally {
+        hostReportError(error, isUncaughtThrownError || false);
         doCleanup();
+      } else {
+        closed = true;
+        try {
+          observer.error(error);
+        } catch (error2) {
+          hostReportError(error2, true /* isUncaughtThrownError */);
+        } finally {
+          doCleanup();
+        }
       }
     },
     complete() {
@@ -517,19 +527,19 @@ function subscribe<T>(source: Source<T>, observer: Observer<T>): Subscription {
         try {
           observer.complete && observer.complete();
         } catch (error) {
-          handleError(error);
+          hostReportError(error, true /* isUncaughtThrownError */);
         } finally {
           doCleanup();
         }
       }
     },
-  };
+  });
 
   // If anything goes wrong during observing the source, handle the error.
   try {
     cleanup = source(sink);
   } catch (error) {
-    sink.error(error);
+    sink.error(error, true /* isUncaughtThrownError */);
   }
 
   if (__DEV__) {
@@ -553,19 +563,28 @@ function subscribe<T>(source: Source<T>, observer: Observer<T>): Subscription {
   return subscription;
 }
 
+function swallowError(_error: Error, _isUncaughtThrownError: boolean): void {
+  // do nothing.
+}
+
 if (__DEV__) {
   // Default implementation of HostReportErrors() in development builds.
   // Can be replaced by the host application environment.
-  RelayObservable.onUnhandledError(error => {
+  RelayObservable.onUnhandledError((error, isUncaughtThrownError) => {
     declare function fail(string): void;
     if (typeof fail === 'function') {
       // In test environments (Jest), fail() immediately fails the current test.
       fail(String(error));
-    } else {
-      // Otherwise, rethrow on the next frame to avoid breaking current logic.
+    } else if (isUncaughtThrownError) {
+      // Rethrow uncaught thrown errors on the next frame to avoid breaking
+      // current logic.
       setTimeout(() => {
         throw error;
       });
+    } else if (typeof console !== 'undefined') {
+      // Otherwise, log the unhandled error for visibility.
+      // eslint-ignore-next-line no-console
+      console.error('RelayObservable: Unhandled Error', error);
     }
   });
 }

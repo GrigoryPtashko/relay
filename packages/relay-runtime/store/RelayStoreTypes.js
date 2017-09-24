@@ -34,11 +34,7 @@ import type {
 import type {DataID} from 'RelayInternalTypes';
 import type {GraphQLTaggedNode} from 'RelayModernGraphQLTag';
 import type {PayloadData} from 'RelayNetworkTypes';
-import type {
-  PayloadError,
-  RelayResponsePayload,
-  UploadableMap,
-} from 'RelayNetworkTypes';
+import type {PayloadError, UploadableMap} from 'RelayNetworkTypes';
 import type RelayObservable from 'RelayObservable';
 import type {RecordState} from 'RelayRecordState';
 import type {Variables} from 'RelayTypes';
@@ -247,46 +243,22 @@ export interface Environment
   getStore(): Store,
 
   /**
-   * Returns an Observable of RelayResponsePayload resulting from the provided
-   * Mutation operation, which are normalized and committed to the publish queue
-   * along with an optional optimistic response or updater.
+   * Returns an Observable of RelayResponsePayload resulting from executing the
+   * provided Mutation operation, the result of which is then normalized and
+   * committed to the publish queue along with an optional optimistic response
+   * or updater.
    *
    * Note: Observables are lazy, so calling this method will do nothing until
    * the result is subscribed to:
-   * environment.observeMutation({...}).subscribe({...}).
+   * environment.executeMutation({...}).subscribe({...}).
    */
-  observeMutation({|
+  executeMutation({|
     operation: OperationSelector,
     optimisticUpdater?: ?SelectorStoreUpdater,
     optimisticResponse?: ?Object,
     updater?: ?SelectorStoreUpdater,
     uploadables?: ?UploadableMap,
   |}): RelayObservable<RelayResponsePayload>,
-
-  /**
-   * @deprecated Use Environment.observeMutation().subscribe()
-   */
-  sendMutation(config: {|
-    onCompleted?: ?(errors: ?Array<PayloadError>) => void,
-    onError?: ?(error: Error) => void,
-    operation: OperationSelector,
-    optimisticResponse?: Object,
-    optimisticUpdater?: ?SelectorStoreUpdater,
-    updater?: ?SelectorStoreUpdater,
-    uploadables?: UploadableMap,
-  |}): Disposable,
-
-  /**
-   * Send a (GraphQL) subscription to the server. Whenever there is a push from
-   * the server, commit the update to the environment.
-   */
-  sendSubscription(config: {|
-    onCompleted?: ?(errors: ?Array<PayloadError>) => void,
-    onNext?: ?(payload: RelayResponsePayload) => void,
-    onError?: ?(error: Error) => void,
-    operation: OperationSelector,
-    updater?: ?SelectorStoreUpdater,
-  |}): Disposable,
 
   /**
    * Checks if the records required to fulfill the given `selector` are in
@@ -301,12 +273,6 @@ export interface Environment
     handlers: Array<MissingFieldHandler>,
   ): boolean,
 }
-
-export type Observer<T> = {
-  onCompleted?: ?() => void,
-  onError?: ?(error: Error) => void,
-  onNext?: ?(data: T) => void,
-};
 
 /**
  * The results of reading data for a fragment. This is similar to a `Selector`,
@@ -418,3 +384,12 @@ export type MissingFieldHandler =
         args: Variables,
       ) => ?Array<?DataID>,
     };
+
+/**
+ * The shape of data that is returned by normalizePayload for a given query.
+ */
+export type RelayResponsePayload = {|
+  fieldPayloads?: ?Array<HandleFieldPayload>,
+  source: MutableRecordSource,
+  errors: ?Array<PayloadError>,
+|};

@@ -686,37 +686,35 @@ describe('ReactRelayPaginationContainer', () => {
     expect(environment.subscribe).not.toBeCalled();
   });
 
-  it('warns if missing @connection directive', () => {
-    jest.mock('warning');
-
+  it('fails if missing @connection directive', () => {
     ({UserFragment, UserQuery} = generateAndCompile(
       `
-      query UserQuery(
-        $after: ID
-        $count: Int!
-        $id: ID!
-        $orderby: [String]
-      ) {
-        node(id: $id) {
-          id
-          ...UserFragment
+        query UserQuery(
+          $after: ID
+          $count: Int!
+          $id: ID!
+          $orderby: [String]
+        ) {
+          node(id: $id) {
+            id
+            ...UserFragment
+          }
         }
-      }
 
-      fragment UserFragment on User {
-        friends(after: $after, first: $count, orderby: $orderby) {
-          edges {
-            node {
-              id
+        fragment UserFragment on User {
+          friends(after: $after, first: $count, orderby: $orderby) {
+            edges {
+              node {
+                id
+              }
+            }
+            pageInfo {
+              endCursor
+              hasNextPage
             }
           }
-          pageInfo {
-            endCursor
-            hasNextPage
-          }
         }
-      }
-    `,
+      `,
     ));
 
     TestContainer = ReactRelayPaginationContainer.createContainer(
@@ -742,53 +740,52 @@ describe('ReactRelayPaginationContainer', () => {
           <TestContainer />
         </ContextSetter>,
       );
-    }).toWarn([
+    }).toFailInvariant(
       'ReactRelayPaginationContainer: A @connection directive must be present.',
-    ]);
+    );
   });
 
-  it('does not warn if one fragemnt has a @connection directive', () => {
-    jest.mock('warning');
+  it('does not fail invariant if one fragment has a @connection directive', () => {
     let ViewerFragment;
     ({UserFragment, UserQuery, ViewerFragment} = generateAndCompile(
       `
-      query UserQuery(
-        $after: ID
-        $count: Int!
-        $id: ID!
-        $orderby: [String]
-      ) {
-        viewer {
-          ...ViewerFragment
-        }
-        node(id: $id) {
-          id
-          ...UserFragment
-        }
-      }
-
-      fragment ViewerFragment on Viewer {
-        actor{
-          id
-        }
-      }
-
-      fragment UserFragment on User {
-        friends(after: $after, first: $count, orderby: $orderby) @connection(
-          key: "UserFragment_friends"
+        query UserQuery(
+          $after: ID
+          $count: Int!
+          $id: ID!
+          $orderby: [String]
         ) {
-          edges {
-            node {
-              id
+          viewer {
+            ...ViewerFragment
+          }
+          node(id: $id) {
+            id
+            ...UserFragment
+          }
+        }
+
+        fragment ViewerFragment on Viewer {
+          actor{
+            id
+          }
+        }
+
+        fragment UserFragment on User {
+          friends(after: $after, first: $count, orderby: $orderby) @connection(
+            key: "UserFragment_friends"
+          ) {
+            edges {
+              node {
+                id
+              }
+            }
+            pageInfo {
+              endCursor
+              hasNextPage
             }
           }
-          pageInfo {
-            endCursor
-            hasNextPage
-          }
         }
-      }
-    `,
+      `,
     ));
 
     TestContainer = ReactRelayPaginationContainer.createContainer(
@@ -815,9 +812,7 @@ describe('ReactRelayPaginationContainer', () => {
           <TestContainer />
         </ContextSetter>,
       );
-    }).not.toWarn([
-      'ReactRelayPaginationContainer: A @connection directive must be present.',
-    ]);
+    }).not.toThrow();
   });
 
   describe('hasMore()', () => {
@@ -878,10 +873,10 @@ describe('ReactRelayPaginationContainer', () => {
       expect(hasMore()).toBe(false);
     });
 
-    it('updates after pagination (if more results)', async () => {
+    it('updates after pagination (if more results)', () => {
       expect.assertions(1);
       loadMore(1, jest.fn());
-      await environment.mock.resolve(UserQuery, {
+      environment.mock.resolve(UserQuery, {
         data: {
           node: {
             __typename: 'User',
@@ -907,10 +902,10 @@ describe('ReactRelayPaginationContainer', () => {
       expect(hasMore()).toBe(true);
     });
 
-    it('updates after pagination (if no more results)', async () => {
+    it('updates after pagination (if no more results)', () => {
       expect.assertions(1);
       loadMore(1, jest.fn());
-      await environment.mock.resolve(UserQuery, {
+      environment.mock.resolve(UserQuery, {
         data: {
           node: {
             __typename: 'User',
@@ -967,10 +962,28 @@ describe('ReactRelayPaginationContainer', () => {
       expect(isLoading()).toBe(false);
     });
 
-    it('returns false once a fetch completes', async () => {
+    it('returns false once a fetch completes', () => {
       expect.assertions(1);
       loadMore(1, jest.fn());
-      await environment.mock.resolve(UserQuery, {
+      environment.mock.resolve(UserQuery, {
+        data: {
+          node: {
+            id: '4',
+            __typename: 'User',
+            // The resuls don't matter, only that the fetch resolved
+            friends: null,
+          },
+        },
+      });
+      expect(isLoading()).toBe(false);
+    });
+
+    it('returns false in the loadMore callback', () => {
+      expect.assertions(2);
+      loadMore(1, () => {
+        expect(isLoading()).toBe(false);
+      });
+      environment.mock.resolve(UserQuery, {
         data: {
           node: {
             id: '4',
@@ -1121,10 +1134,10 @@ describe('ReactRelayPaginationContainer', () => {
         id: '4',
       };
       const {dispose} = loadMore(1, jest.fn());
-      const sendQueryDispose = environment.streamQuery.mock.dispose;
-      expect(sendQueryDispose).not.toBeCalled();
+      const subscription = environment.execute.mock.subscriptions[0];
+      expect(subscription.closed).toBe(false);
       dispose();
-      expect(sendQueryDispose).toBeCalled();
+      expect(subscription.closed).toBe(true);
     });
 
     it('fetches the new variables', () => {
@@ -1152,7 +1165,7 @@ describe('ReactRelayPaginationContainer', () => {
       ).toBe(true);
     });
 
-    it('calls the callback when the fetch succeeds', async () => {
+    it('calls the callback when the fetch succeeds', () => {
       expect.assertions(2);
       const callback = jest.fn();
       variables = {
@@ -1162,7 +1175,7 @@ describe('ReactRelayPaginationContainer', () => {
         orderby: ['name'],
       };
       loadMore(1, callback);
-      await environment.mock.resolve(UserQuery, {
+      environment.mock.resolve(UserQuery, {
         data: {
           node: null,
         },
@@ -1171,12 +1184,12 @@ describe('ReactRelayPaginationContainer', () => {
       expect(callback.mock.calls[0].length).toBe(0);
     });
 
-    it('calls the callback when the fetch fails', async () => {
+    it('calls the callback when the fetch fails', () => {
       expect.assertions(2);
       const callback = jest.fn();
       loadMore(1, callback);
       const error = new Error('oops');
-      await environment.mock.reject(UserQuery, error);
+      environment.mock.reject(UserQuery, error);
       expect(callback.mock.calls.length).toBe(1);
       expect(callback).toBeCalledWith(error);
     });
@@ -1220,13 +1233,13 @@ describe('ReactRelayPaginationContainer', () => {
       expect(callback).toHaveBeenCalled();
     });
 
-    it('renders with the results of the new variables on success', async () => {
+    it('renders with the results of the new variables on success', () => {
       expect.assertions(5);
       expect(render.mock.calls.length).toBe(1);
       expect(render.mock.calls[0][0].user.friends.edges.length).toBe(1);
       loadMore(1, jest.fn());
       expect(render.mock.calls.length).toBe(1);
-      await environment.mock.resolve(UserQuery, {
+      environment.mock.resolve(UserQuery, {
         data: {
           node: {
             id: '4',
@@ -1252,29 +1265,29 @@ describe('ReactRelayPaginationContainer', () => {
       expect(render.mock.calls[1][0].user.friends.edges.length).toBe(2);
     });
 
-    it('does not update variables on failure', async () => {
+    it('does not update variables on failure', () => {
       expect.assertions(1);
       render.mockClear();
       loadMore(1, jest.fn());
-      await environment.mock.reject(UserQuery, new Error('oops'));
+      environment.mock.reject(UserQuery, new Error('oops'));
       expect(render.mock.calls.length).toBe(0);
     });
 
     it('continues the fetch if new props refer to the same records', () => {
       loadMore(1, jest.fn());
-      const dispose = environment.streamQuery.mock.dispose;
+      const subscription = environment.execute.mock.subscriptions[0];
       const userPointer = environment.lookup({
         dataID: ROOT_ID,
         node: UserQuery.fragment,
         variables, // same user
       }).data.node;
       instance.getInstance().setProps({user: userPointer});
-      expect(dispose).not.toBeCalled();
+      expect(subscription.closed).toBe(false);
     });
 
     it('cancels the fetch if new props refer to different records', () => {
       loadMore(1, jest.fn());
-      const dispose = environment.streamQuery.mock.dispose;
+      const subscription = environment.execute.mock.subscriptions[0];
       const userPointer = environment.lookup({
         dataID: ROOT_ID,
         node: UserQuery.fragment,
@@ -1285,13 +1298,13 @@ describe('ReactRelayPaginationContainer', () => {
         },
       }).data.node;
       instance.getInstance().setProps({user: userPointer});
-      expect(dispose).toBeCalled();
+      expect(subscription.closed).toBe(true);
     });
 
-    it('holds pagination results if new props refer to the same records', async () => {
+    it('holds pagination results if new props refer to the same records', () => {
       expect.assertions(2);
       loadMore(1, jest.fn());
-      await environment.mock.resolve(UserQuery, {
+      environment.mock.resolve(UserQuery, {
         data: {
           node: {
             id: '4',
@@ -1311,10 +1324,10 @@ describe('ReactRelayPaginationContainer', () => {
       expect(references[0].dispose).not.toBeCalled();
     });
 
-    it('releases pagination results if new props refer to different records', async () => {
+    it('releases pagination results if new props refer to different records', () => {
       expect.assertions(2);
       loadMore(1, jest.fn());
-      await environment.mock.resolve(UserQuery, {
+      environment.mock.resolve(UserQuery, {
         data: {
           node: {
             id: '4',
@@ -1404,10 +1417,10 @@ describe('ReactRelayPaginationContainer', () => {
         id: '4',
       };
       const {dispose} = refetchConnection(1, jest.fn());
-      const sendQueryDispose = environment.streamQuery.mock.dispose;
-      expect(sendQueryDispose).not.toBeCalled();
+      const subscription = environment.execute.mock.subscriptions[0];
+      expect(subscription.closed).toBe(false);
       dispose();
-      expect(sendQueryDispose).toBeCalled();
+      expect(subscription.closed).toBe(true);
     });
 
     it('fetches the new variables', () => {
@@ -1426,7 +1439,7 @@ describe('ReactRelayPaginationContainer', () => {
       ).toBe(true);
     });
 
-    it('calls the callback when the fetch succeeds', async () => {
+    it('calls the callback when the fetch succeeds', () => {
       expect.assertions(2);
       const callback = jest.fn();
       variables = {
@@ -1434,7 +1447,7 @@ describe('ReactRelayPaginationContainer', () => {
         id: '4',
       };
       refetchConnection(1, callback);
-      await environment.mock.resolve(UserQuery, {
+      environment.mock.resolve(UserQuery, {
         data: {
           node: null,
         },
@@ -1443,23 +1456,23 @@ describe('ReactRelayPaginationContainer', () => {
       expect(callback.mock.calls[0].length).toBe(0);
     });
 
-    it('calls the callback when the fetch fails', async () => {
+    it('calls the callback when the fetch fails', () => {
       expect.assertions(2);
       const callback = jest.fn();
       refetchConnection(1, callback);
       const error = new Error('oops');
-      await environment.mock.reject(UserQuery, error);
+      environment.mock.reject(UserQuery, error);
       expect(callback.mock.calls.length).toBe(1);
       expect(callback).toBeCalledWith(error);
     });
 
-    it('renders with the results of the new variables on success', async () => {
+    it('renders with the results of the new variables on success', () => {
       expect.assertions(6);
       expect(render.mock.calls.length).toBe(1);
       expect(render.mock.calls[0][0].user.friends.edges.length).toBe(1);
       refetchConnection(1, jest.fn());
       expect(render.mock.calls.length).toBe(1);
-      await environment.mock.resolve(UserQuery, {
+      environment.mock.resolve(UserQuery, {
         data: {
           node: {
             __typename: 'User',
@@ -1513,29 +1526,29 @@ describe('ReactRelayPaginationContainer', () => {
       });
     });
 
-    it('does not update variables on failure', async () => {
+    it('does not update variables on failure', () => {
       expect.assertions(1);
       render.mockClear();
       refetchConnection(1, jest.fn());
-      await environment.mock.reject(UserQuery, new Error('oops'));
+      environment.mock.reject(UserQuery, new Error('oops'));
       expect(render.mock.calls.length).toBe(0);
     });
 
     it('continues the fetch if new props refer to the same records', () => {
       refetchConnection(1, jest.fn());
-      const dispose = environment.streamQuery.mock.dispose;
+      const subscription = environment.execute.mock.subscriptions[0];
       const userPointer = environment.lookup({
         dataID: ROOT_ID,
         node: UserQuery.fragment,
         variables, // same user
       }).data.node;
       instance.getInstance().setProps({user: userPointer});
-      expect(dispose).not.toBeCalled();
+      expect(subscription.closed).toBe(false);
     });
 
     it('cancels the fetch if new props refer to different records', () => {
       refetchConnection(1, jest.fn());
-      const dispose = environment.streamQuery.mock.dispose;
+      const subscription = environment.execute.mock.subscriptions[0];
       const userPointer = environment.lookup({
         dataID: ROOT_ID,
         node: UserQuery.fragment,
@@ -1546,13 +1559,13 @@ describe('ReactRelayPaginationContainer', () => {
         },
       }).data.node;
       instance.getInstance().setProps({user: userPointer});
-      expect(dispose).toBeCalled();
+      expect(subscription.closed).toBe(true);
     });
 
-    it('holds pagination results if new props refer to the same records', async () => {
+    it('holds pagination results if new props refer to the same records', () => {
       expect.assertions(2);
       refetchConnection(1, jest.fn());
-      await environment.mock.resolve(UserQuery, {
+      environment.mock.resolve(UserQuery, {
         data: {
           node: {
             id: '4',
@@ -1572,10 +1585,10 @@ describe('ReactRelayPaginationContainer', () => {
       expect(references[0].dispose).not.toBeCalled();
     });
 
-    it('releases pagination results if new props refer to different records', async () => {
+    it('releases pagination results if new props refer to different records', () => {
       expect.assertions(2);
       refetchConnection(1, jest.fn());
-      await environment.mock.resolve(UserQuery, {
+      environment.mock.resolve(UserQuery, {
         data: {
           node: {
             id: '4',
@@ -1599,13 +1612,13 @@ describe('ReactRelayPaginationContainer', () => {
       expect(references[0].dispose).toBeCalled();
     });
 
-    it('rerenders with the results of new overridden variables', async () => {
+    it('rerenders with the results of new overridden variables', () => {
       expect.assertions(8);
       expect(render.mock.calls.length).toBe(1);
       expect(render.mock.calls[0][0].user.friends.edges.length).toBe(1);
       refetchConnection(1, jest.fn(), {orderby: ['last_name']});
       expect(render.mock.calls.length).toBe(1);
-      await environment.mock.resolve(UserQuery, {
+      environment.mock.resolve(UserQuery, {
         data: {
           node: {
             id: '4',

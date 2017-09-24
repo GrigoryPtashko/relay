@@ -21,6 +21,7 @@ const RelayPublishQueue = require('RelayPublishQueue');
 
 const normalizePayload = require('normalizePayload');
 const normalizeRelayPayload = require('normalizeRelayPayload');
+const warning = require('warning');
 
 import type {CacheConfig, Disposable} from 'RelayCombinedEnvironmentTypes';
 import type {EnvironmentDebugger} from 'RelayDebugger';
@@ -29,7 +30,6 @@ import type {
   Network,
   PayloadData,
   PayloadError,
-  RelayResponsePayload,
   UploadableMap,
 } from 'RelayNetworkTypes';
 import type RelayObservable from 'RelayObservable';
@@ -43,6 +43,7 @@ import type {
   Snapshot,
   Store,
   StoreUpdater,
+  RelayResponsePayload,
   UnstableEnvironmentCore,
 } from 'RelayStoreTypes';
 
@@ -73,6 +74,11 @@ class RelayModernEnvironment implements Environment {
 
     (this: any).__setNet = newNet => (this._network = newNet);
 
+    // TODO(#21781004): This adds support for the older Relay Debugger, which
+    // has been replaced with the Relay DevTools global hook below. This logic
+    // should stick around for a release or two to not break support for the
+    // existing debugger. After allowing time to migrate to latest versions,
+    // this code can be removed.
     if (__DEV__) {
       const g = typeof global !== 'undefined' ? global : window;
 
@@ -85,9 +91,13 @@ class RelayModernEnvironment implements Environment {
 
       // Setup the runtime part for Native
       if (typeof g.registerDevtoolsPlugin === 'function') {
-        g.registerDevtoolsPlugin(
-          require('relay-debugger-react-native-runtime'),
-        );
+        try {
+          g.registerDevtoolsPlugin(
+            require('relay-debugger-react-native-runtime'),
+          );
+        } catch (error) {
+          // No debugger for you.
+        }
       }
 
       const envId = g.__RELAY_DEBUGGER__.registerEnvironment(this);
@@ -95,10 +105,25 @@ class RelayModernEnvironment implements Environment {
     } else {
       this._debugger = null;
     }
+
+    // Register this Relay Environment with Relay DevTools if it exists.
+    // Note: this must always be the last step in the constructor.
+    const _global =
+      typeof global !== 'undefined'
+        ? global
+        : typeof window !== 'undefined' ? window : undefined;
+    const devToolsHook = _global && _global.__RELAY_DEVTOOLS_HOOK__;
+    if (devToolsHook) {
+      devToolsHook.registerEnvironment(this);
+    }
   }
 
   getStore(): Store {
     return this._store;
+  }
+
+  getNetwork(): Network {
+    return this._network;
   }
 
   getDebugger(): ?EnvironmentDebugger {
@@ -177,14 +202,14 @@ class RelayModernEnvironment implements Environment {
   }
 
   /**
-   * Returns an Observable of RelayResponsePayload resulting from the provided
-   * Query or Subscription operation, each of which are normalized and committed
-   * to the publish queue.
+   * Returns an Observable of RelayResponsePayload resulting from executing the
+   * provided Query or Subscription operation, each result of which is then
+   * normalized and committed to the publish queue.
    *
    * Note: Observables are lazy, so calling this method will do nothing until
-   * the result is subscribed to: environment.observe({...}).subscribe({...}).
+   * the result is subscribed to: environment.execute({...}).subscribe({...}).
    */
-  observe({
+  execute({
     operation,
     cacheConfig,
     updater,
@@ -195,7 +220,7 @@ class RelayModernEnvironment implements Environment {
   }): RelayObservable<RelayResponsePayload> {
     const {node, variables} = operation;
     return this._network
-      .observe(node, variables, cacheConfig || {})
+      .execute(node, variables, cacheConfig || {})
       .map(payload => normalizePayload(node, variables, payload))
       .do({
         next: payload => {
@@ -206,15 +231,16 @@ class RelayModernEnvironment implements Environment {
   }
 
   /**
-   * Returns an Observable of RelayResponsePayload resulting from the provided
-   * Mutation operation, which are normalized and committed to the publish queue
-   * along with an optional optimistic response or updater.
+   * Returns an Observable of RelayResponsePayload resulting from executing the
+   * provided Mutation operation, the result of which is then normalized and
+   * committed to the publish queue along with an optional optimistic response
+   * or updater.
    *
    * Note: Observables are lazy, so calling this method will do nothing until
    * the result is subscribed to:
-   * environment.observeMutation({...}).subscribe({...}).
+   * environment.executeMutation({...}).subscribe({...}).
    */
-  observeMutation({
+  executeMutation({
     operation,
     optimisticResponse,
     optimisticUpdater,
@@ -240,7 +266,7 @@ class RelayModernEnvironment implements Environment {
     }
 
     return this._network
-      .observe(node, variables, {force: true}, uploadables)
+      .execute(node, variables, {force: true}, uploadables)
       .map(payload => normalizePayload(node, variables, payload))
       .do({
         start: () => {
@@ -307,7 +333,7 @@ class RelayModernEnvironment implements Environment {
   }
 
   /**
-   * @deprecated Use Environment.observe().subscribe()
+   * @deprecated Use Environment.execute().subscribe()
    */
   sendQuery({
     cacheConfig,
@@ -322,7 +348,12 @@ class RelayModernEnvironment implements Environment {
     onNext?: ?(payload: RelayResponsePayload) => void,
     operation: OperationSelector,
   }): Disposable {
-    return this.observe({operation, cacheConfig}).subscribeLegacy({
+    warning(
+      false,
+      'environment.sendQuery() is deprecated. Update to the latest ' +
+        'version of react-relay, and use environment.execute().',
+    );
+    return this.execute({operation, cacheConfig}).subscribeLegacy({
       onNext,
       onError,
       onCompleted,
@@ -330,7 +361,7 @@ class RelayModernEnvironment implements Environment {
   }
 
   /**
-   * @deprecated Use Environment.observe().subscribe()
+   * @deprecated Use Environment.execute().subscribe()
    */
   streamQuery({
     cacheConfig,
@@ -345,7 +376,12 @@ class RelayModernEnvironment implements Environment {
     onNext?: ?(payload: RelayResponsePayload) => void,
     operation: OperationSelector,
   }): Disposable {
-    return this.observe({operation, cacheConfig}).subscribeLegacy({
+    warning(
+      false,
+      'environment.streamQuery() is deprecated. Update to the latest ' +
+        'version of react-relay, and use environment.execute().',
+    );
+    return this.execute({operation, cacheConfig}).subscribeLegacy({
       onNext,
       onError,
       onCompleted,
@@ -353,7 +389,7 @@ class RelayModernEnvironment implements Environment {
   }
 
   /**
-   * @deprecated Use Environment.observeMutation().subscribe()
+   * @deprecated Use Environment.executeMutation().subscribe()
    */
   sendMutation({
     onCompleted,
@@ -372,7 +408,12 @@ class RelayModernEnvironment implements Environment {
     updater?: ?SelectorStoreUpdater,
     uploadables?: UploadableMap,
   }): Disposable {
-    return this.observeMutation({
+    warning(
+      false,
+      'environment.sendMutation() is deprecated. Update to the latest ' +
+        'version of react-relay, and use environment.executeMutation().',
+    );
+    return this.executeMutation({
       operation,
       optimisticResponse,
       optimisticUpdater,
@@ -380,10 +421,10 @@ class RelayModernEnvironment implements Environment {
       uploadables,
     }).subscribeLegacy({
       // NOTE: sendMutation has a non-standard use of onCompleted() by passing
-      // it a value. When switching to use observeMutation(), the next()
+      // it a value. When switching to use executeMutation(), the next()
       // Observer should be used to preserve behavior.
       onNext: payload => {
-        payload.errors && onCompleted && onCompleted(payload.errors);
+        onCompleted && onCompleted(payload.errors);
       },
       onError,
       onCompleted,
@@ -391,7 +432,7 @@ class RelayModernEnvironment implements Environment {
   }
 
   /**
-   * @deprecated Use Environment.observe().subscribe()
+   * @deprecated Use Environment.execute().subscribe()
    */
   sendSubscription({
     onCompleted,
@@ -406,7 +447,12 @@ class RelayModernEnvironment implements Environment {
     operation: OperationSelector,
     updater?: ?SelectorStoreUpdater,
   }): Disposable {
-    return this.observe({
+    warning(
+      false,
+      'environment.sendSubscription() is deprecated. Update to the latest ' +
+        'version of react-relay, and use environment.execute().',
+    );
+    return this.execute({
       operation,
       updater,
       cacheConfig: {force: true},

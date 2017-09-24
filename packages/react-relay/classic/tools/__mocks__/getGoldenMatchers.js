@@ -197,7 +197,7 @@ function getGoldenMatchers(...args) {
       });
       return {
         pass: failures.length === 0,
-        message:
+        message: () =>
           'actual output did not match expected for files: ' +
           failures.map(failure => failure.name).join(', ') +
           ' (if these changes are intended, re-run the tests with the ' +
@@ -220,7 +220,7 @@ function normalize(string) {
  * Log some output.
  */
 function log(...args) {
-  // eslint-disable-next-line no-console-disallow
+  // eslint-disable-next-line no-console
   console.log(...args);
 }
 

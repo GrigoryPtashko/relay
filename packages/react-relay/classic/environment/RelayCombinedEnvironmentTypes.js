@@ -177,36 +177,6 @@ export interface CEnvironment<
   retain(selector: CSelector<TNode>): Disposable,
 
   /**
-   * Send a query to the server with request/response semantics: the query will
-   * either complete successfully (calling `onNext` and `onCompleted`) or fail
-   * (calling `onError`).
-   *
-   * Note: Most applications should use `streamQuery` in order to
-   * optionally receive updated information over time, should that feature be
-   * supported by the network/server. A good rule of thumb is to use this method
-   * if you would otherwise immediately dispose the `streamQuery()`
-   * after receving the first `onNext` result.
-   */
-  sendQuery(config: {|
-    cacheConfig?: ?CacheConfig,
-    onCompleted?: ?() => void,
-    onError?: ?(error: Error) => void,
-    onNext?: ?(payload: TPayload) => void,
-    operation: COperationSelector<TNode, TOperation>,
-  |}): Disposable,
-
-  /**
-   * @deprecated Use Environment.observe().subscribe()
-   */
-  streamQuery(config: {|
-    cacheConfig?: ?CacheConfig,
-    onCompleted?: ?() => void,
-    onError?: ?(error: Error) => void,
-    onNext?: ?(payload: TPayload) => void,
-    operation: COperationSelector<TNode, TOperation>,
-  |}): Disposable,
-
-  /**
    * Send a query to the server with Observer semantics: one or more
    * responses may be returned (via `next`) over time followed by either
    * the request completing (`completed`) or an error (`error`).
@@ -215,9 +185,9 @@ export interface CEnvironment<
    * subscription open indefinitely such that `complete` is not called.
    *
    * Note: Observables are lazy, so calling this method will do nothing until
-   * the result is subscribed to: environment.observe({...}).subscribe({...}).
+   * the result is subscribed to: environment.execute({...}).subscribe({...}).
    */
-  observe(config: {|
+  execute(config: {|
     operation: COperationSelector<TNode, TOperation>,
     cacheConfig?: ?CacheConfig,
     updater?: ?SelectorStoreUpdater,
