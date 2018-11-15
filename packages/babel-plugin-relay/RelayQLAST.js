@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  * @fullSyntaxTransform
@@ -73,6 +71,7 @@ type RelayQLSelection =
   RelayQLInlineFragment;
 
 type RelayQLNodeType = {
+  // TT24544397 Should be +loc?: Location, remove-flow-types doesn't understand
   loc?: Location,
 };
 
@@ -108,6 +107,9 @@ class RelayQLNode<T: RelayQLNodeType> {
   }
 
   getSelections(): Array<RelayQLSelection> {
+    /* $FlowFixMe(>=0.68.0 site=react_native_fb,react_native_oss) This comment
+     * suppresses an error found when Flow v0.68 was deployed. To see the error
+     * delete this comment and run Flow. */
     if (!this.ast.selectionSet) {
       return [];
     }
@@ -134,9 +136,9 @@ class RelayQLNode<T: RelayQLNodeType> {
 
   getDirectives(): Array<RelayQLDirective> {
     // $FlowFixMe
-    return (this.ast.directives || [])
-      .filter(directive => directive.name.value !== 'fb_native_field')
-      .map(directive => new RelayQLDirective(this.context, directive));
+    return (this.ast.directives || []).map(
+      directive => new RelayQLDirective(this.context, directive),
+    );
   }
 
   hasDirective(name: string): boolean {
@@ -152,6 +154,9 @@ class RelayQLNode<T: RelayQLNodeType> {
 class RelayQLDefinition<T: RelayQLNodeType> extends RelayQLNode<T> {
   getName(): ?string {
     // TODO: this.context.definitionName;
+    /* $FlowFixMe(>=0.68.0 site=react_native_fb,react_native_oss) This comment
+     * suppresses an error found when Flow v0.68 was deployed. To see the error
+     * delete this comment and run Flow. */
     return this.ast.name
       ? // $FlowFixMe
         this.ast.name.value
@@ -160,6 +165,7 @@ class RelayQLDefinition<T: RelayQLNodeType> extends RelayQLNode<T> {
 }
 
 class RelayQLFragment extends RelayQLDefinition<
+  // $FlowFixMe TT24544397
   FragmentDefinitionNode | InlineFragmentNode,
 > {
   parentType: ?RelayQLType;
@@ -219,18 +225,21 @@ class RelayQLFragment extends RelayQLDefinition<
   }
 }
 
+// $FlowFixMe TT24544397
 class RelayQLMutation extends RelayQLDefinition<OperationDefinitionNode> {
   getType(): RelayQLType {
     return new RelayQLType(this.context, this.context.schema.getMutationType());
   }
 }
 
+// $FlowFixMe TT24544397
 class RelayQLQuery extends RelayQLDefinition<OperationDefinitionNode> {
   getType(): RelayQLType {
     return new RelayQLType(this.context, this.context.schema.getQueryType());
   }
 }
 
+// $FlowFixMe TT24544397
 class RelayQLSubscription extends RelayQLDefinition<OperationDefinitionNode> {
   getType(): RelayQLType {
     return new RelayQLType(
@@ -240,6 +249,7 @@ class RelayQLSubscription extends RelayQLDefinition<OperationDefinitionNode> {
   }
 }
 
+// $FlowFixMe TT24544397
 class RelayQLField extends RelayQLNode<FieldNode> {
   fieldDef: RelayQLFieldDefinition;
 
@@ -318,6 +328,7 @@ class RelayQLField extends RelayQLNode<FieldNode> {
   }
 }
 
+// $FlowFixMe TT24544397
 class RelayQLFragmentSpread extends RelayQLNode<FragmentSpreadNode> {
   getName(): string {
     return this.ast.name.value;
@@ -331,6 +342,7 @@ class RelayQLFragmentSpread extends RelayQLNode<FragmentSpreadNode> {
   }
 }
 
+// $FlowFixMe TT24544397
 class RelayQLInlineFragment extends RelayQLNode<InlineFragmentNode> {
   parentType: RelayQLType;
 
@@ -529,42 +541,33 @@ class RelayQLType {
       schemaFieldDef = type.getFields()[fieldName];
     }
 
-    // Temporary workarounds to support legacy schemas
-    if (!schemaFieldDef) {
-      if (hasTypeName && fieldName === '__type__') {
-        schemaFieldDef = {
-          name: '__type__',
-          type: new GraphQLNonNull(this.context.schema.getType('Type')),
-          description: 'The introspected type of this object.',
-          deprecatedReason: 'Use __typename',
-          args: [],
-        };
-      } else if (
-        isAbstractType(type) &&
-        fieldAST &&
-        fieldAST.directives &&
-        fieldAST.directives.some(
-          directive => directive.name.value === 'fixme_fat_interface',
-        )
-      ) {
-        const possibleTypes = this.context.schema.getPossibleTypes(type);
-        for (let ii = 0; ii < possibleTypes.length; ii++) {
-          const possibleField = possibleTypes[ii].getFields()[fieldName];
-          if (possibleField) {
-            // Fat interface fields can have differing arguments. Try to return
-            // a field with matching arguments, but still return a field if the
-            // arguments do not match.
-            schemaFieldDef = possibleField;
-            if (fieldAST && fieldAST.arguments) {
-              const argumentsAllExist = fieldAST.arguments.every(argument =>
-                find(
-                  possibleField.args,
-                  argDef => argDef.name === argument.name.value,
-                ),
-              );
-              if (argumentsAllExist) {
-                break;
-              }
+    // Temporary workaround to support fixme_fat_interface
+    if (
+      !schemaFieldDef &&
+      isAbstractType(type) &&
+      fieldAST &&
+      fieldAST.directives &&
+      fieldAST.directives.some(
+        directive => directive.name.value === 'fixme_fat_interface',
+      )
+    ) {
+      const possibleTypes = this.context.schema.getPossibleTypes(type);
+      for (let ii = 0; ii < possibleTypes.length; ii++) {
+        const possibleField = possibleTypes[ii].getFields()[fieldName];
+        if (possibleField) {
+          // Fat interface fields can have differing arguments. Try to return
+          // a field with matching arguments, but still return a field if the
+          // arguments do not match.
+          schemaFieldDef = possibleField;
+          if (fieldAST && fieldAST.arguments) {
+            const argumentsAllExist = fieldAST.arguments.every(argument =>
+              find(
+                possibleField.args,
+                argDef => argDef.name === argument.name.value,
+              ),
+            );
+            if (argumentsAllExist) {
+              break;
             }
           }
         }

@@ -1,12 +1,9 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayReadyStateRenderer
  * @flow
  * @format
  */
@@ -14,24 +11,21 @@
 'use strict';
 
 const React = require('React');
-const RelayFragmentPointer = require('RelayFragmentPointer');
-const RelayPropTypes = require('RelayPropTypes');
-const RelayStaticContainer = require('RelayStaticContainer');
+const ReactRelayContext = require('../../modern/ReactRelayContext');
+const RelayFragmentPointer = require('../query/RelayFragmentPointer');
+const RelayStaticContainer = require('./RelayStaticContainer');
 
-const getRelayQueries = require('getRelayQueries');
+const getRelayQueries = require('./getRelayQueries');
 const mapObject = require('mapObject');
 
-import type {
-  ClassicRelayContext,
-  RelayEnvironmentInterface,
-} from 'RelayEnvironment';
-import type {RelayQuerySet} from 'RelayInternalTypes';
-import type RelayQuery from 'RelayQuery';
-import type {RelayQueryConfigInterface} from 'RelayQueryConfig';
-import type {ReadyState, ReadyStateEvent, RelayContainer} from 'RelayTypes';
+import type {RelayQueryConfigInterface} from '../query-config/RelayQueryConfig';
+import type RelayQuery from '../query/RelayQuery';
+import type {RelayEnvironmentInterface} from '../store/RelayEnvironment';
+import type {RelayQuerySet} from '../tools/RelayInternalTypes';
+import type {ReadyState, ReadyStateEvent} from '../tools/RelayTypes';
 
 type Props = {
-  Container: RelayContainer,
+  Container: React.ComponentType<any>,
   environment: RelayEnvironmentInterface,
   queryConfig: RelayQueryConfigInterface,
   readyState?: ?ReadyState,
@@ -74,32 +68,22 @@ class RelayReadyStateRenderer extends React.Component<
     getContainerProps: RelayContainerPropsFactory,
   },
 > {
-  static childContextTypes = {
-    relay: RelayPropTypes.ClassicRelay,
-    route: RelayPropTypes.QueryConfig.isRequired,
-  };
-
-  _relay: ClassicRelayContext;
+  // TODO t16225453
+  _relay: $FlowFixMe;
 
   constructor(props: Props, context: any) {
     super(props, context);
     this._relay = {
       environment: props.environment,
       variables: props.queryConfig.params,
+      route: props.queryConfig,
     };
     this.state = {
       getContainerProps: createContainerPropsFactory(),
     };
   }
 
-  getChildContext(): Object {
-    return {
-      relay: this._relay,
-      route: this.props.queryConfig,
-    };
-  }
-
-  componentWillReceiveProps(nextProps: Props): void {
+  UNSAFE_componentWillReceiveProps(nextProps: Props): void {
     if (
       this.props.environment !== nextProps.environment ||
       this.props.queryConfig !== nextProps.queryConfig
@@ -107,6 +91,7 @@ class RelayReadyStateRenderer extends React.Component<
       this._relay = {
         environment: nextProps.environment,
         variables: nextProps.queryConfig.params,
+        route: nextProps.queryConfig,
       };
     }
   }
@@ -170,9 +155,11 @@ class RelayReadyStateRenderer extends React.Component<
       shouldUpdate = false;
     }
     return (
-      <RelayStaticContainer shouldUpdate={shouldUpdate}>
-        {children}
-      </RelayStaticContainer>
+      <ReactRelayContext.Provider value={this._relay}>
+        <RelayStaticContainer shouldUpdate={shouldUpdate}>
+          {children}
+        </RelayStaticContainer>
+      </ReactRelayContext.Provider>
     );
   }
 }

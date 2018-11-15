@@ -1,20 +1,17 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayRouteFragment
- * @flow
+ * @flow strict-local
  * @format
  */
 
 'use strict';
 
-import type RelayMetaRoute from 'RelayMetaRoute';
-import type {RelayConcreteNode} from 'RelayQL';
+import type RelayMetaRoute from '../route/RelayMetaRoute';
+import type {RelayConcreteNode} from './RelayQL';
 
 type FragmentBuilder = (route: RelayMetaRoute) => ?RelayConcreteNode;
 

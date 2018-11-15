@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @format
  * @emails oncall+relay
@@ -12,16 +10,18 @@
 
 'use strict';
 
-const RelayInMemoryRecordSource = require('RelayInMemoryRecordSource');
+const RelayInMemoryRecordSource = require('../../store/RelayInMemoryRecordSource');
 const RelayModernTestUtils = require('RelayModernTestUtils');
-const RelayRecordProxy = require('RelayRecordProxy');
-const RelayRecordSourceMutator = require('RelayRecordSourceMutator');
-const RelayRecordSourceProxy = require('RelayRecordSourceProxy');
-const RelayStoreUtils = require('RelayStoreUtils');
+const RelayRecordProxy = require('../RelayRecordProxy');
+const RelayRecordSourceMutator = require('../RelayRecordSourceMutator');
+const RelayRecordSourceProxy = require('../RelayRecordSourceProxy');
+const RelayStoreUtils = require('../../store/RelayStoreUtils');
 
-const simpleClone = require('simpleClone');
+const simpleClone = require('../../util/simpleClone');
 
-const {createOperationSelector} = require('RelayModernOperationSelector');
+const {
+  createOperationSelector,
+} = require('../../store/RelayModernOperationSelector');
 
 const {
   ID_KEY,
@@ -52,7 +52,7 @@ describe('RelayRecordSourceProxy', () => {
       4: {
         [ID_KEY]: '4',
         [TYPENAME_KEY]: 'User',
-        'address{"location":"WORK"}': '1 Hacker Way',
+        'address(location:"WORK")': '1 Hacker Way',
         administeredPages: {[REFS_KEY]: ['beast']},
         blockedPages: {[REFS_KEY]: ['mpk']},
         hometown: {[REF_KEY]: 'mpk'},
@@ -399,7 +399,7 @@ describe('RelayRecordSourceProxy', () => {
       4: {
         [ID_KEY]: '4',
         [TYPENAME_KEY]: 'User',
-        'address{"location":"WORK"}': '1601 Willow Road',
+        'address(location:"WORK")': '1601 Willow Road',
         administeredPages: {[REFS_KEY]: ['mpk']},
         blockedPages: {[REFS_KEY]: []},
         hometown: {[REF_KEY]: 'beast'},

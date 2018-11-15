@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails oncall+relay
  * @format
@@ -12,17 +10,15 @@
 
 'use strict';
 
-jest.enableAutomock();
+jest.mock('warning').mock('../../legacy/store/GraphQLRange');
 
 require('configureForRelayOSS');
 
-jest.mock('warning');
-
-const GraphQLRange = require('GraphQLRange');
-const RelayClassic = require('RelayClassic');
-const RelayQueryPath = require('RelayQueryPath');
-const RelayRecordStore = require('RelayRecordStore');
-const RelayRecordWriter = require('RelayRecordWriter');
+const GraphQLRange = require('../../legacy/store/GraphQLRange');
+const RelayClassic = require('../../RelayPublic');
+const RelayQueryPath = require('../../query/RelayQueryPath');
+const RelayRecordStore = require('../RelayRecordStore');
+const RelayRecordWriter = require('../RelayRecordWriter');
 const RelayTestUtils = require('RelayTestUtils');
 
 describe('RelayRecordStore', () => {

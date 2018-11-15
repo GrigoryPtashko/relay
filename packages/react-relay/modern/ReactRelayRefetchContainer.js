@@ -1,12 +1,9 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule ReactRelayRefetchContainer
  * @flow
  * @format
  */
@@ -14,40 +11,45 @@
 'use strict';
 
 const React = require('React');
-const RelayProfiler = require('RelayProfiler');
-const RelayPropTypes = require('RelayPropTypes');
+const ReactRelayContext = require('./ReactRelayContext');
+const ReactRelayQueryFetcher = require('./ReactRelayQueryFetcher');
 
 const areEqual = require('areEqual');
-const buildReactRelayContainer = require('buildReactRelayContainer');
-const invariant = require('invariant');
-const isRelayContext = require('isRelayContext');
-const isScalarAndEqual = require('isScalarAndEqual');
-const nullthrows = require('nullthrows');
+const buildReactRelayContainer = require('./buildReactRelayContainer');
+const warning = require('warning');
 
-const {profileContainer} = require('ReactRelayContainerProfiler');
-const {getComponentName, getReactComponent} = require('RelayContainerUtils');
-const {Observable} = require('RelayRuntime');
+const {profileContainer} = require('./ReactRelayContainerProfiler');
+const {getContainerName} = require('./ReactRelayContainerUtils');
+const {assertRelayContext} = require('./RelayContext');
+const {Observable, RelayProfiler, isScalarAndEqual} = require('relay-runtime');
 
+import type {FragmentSpecResolver} from '../classic/environment/RelayCombinedEnvironmentTypes';
 import type {
+  $RelayProps,
+  ObserverOrCallback,
   GeneratedNodeMap,
   RefetchOptions,
   RelayRefetchProp,
-} from 'ReactRelayTypes';
+} from './ReactRelayTypes';
 import type {
   Disposable,
-  FragmentSpecResolver,
-} from 'RelayCombinedEnvironmentTypes';
-import type {GraphQLTaggedNode} from 'RelayModernGraphQLTag';
-import type {Subscription} from 'RelayRuntime';
-import type {FragmentMap, RelayContext} from 'RelayStoreTypes';
-import type {Variables} from 'RelayTypes';
+  FragmentMap,
+  GraphQLTaggedNode,
+  RelayContext,
+  Subscription,
+  Variables,
+} from 'relay-runtime';
+
+type ContainerProps = $FlowFixMeProps;
 
 type ContainerState = {
   data: {[key: string]: mixed},
+  prevProps: ContainerProps,
+  localVariables: ?Variables,
+  prevPropsContext: RelayContext,
   relayProp: RelayRefetchProp,
-};
-const containerContextTypes = {
-  relay: RelayPropTypes.Relay,
+  resolver: FragmentSpecResolver,
+  contextForChildren: RelayContext,
 };
 
 /**
@@ -56,62 +58,93 @@ const containerContextTypes = {
  * updates.
  */
 function createContainerWithFragments<
-  TConfig,
-  TClass: React.ComponentType<TConfig>,
+  Props: {},
+  TComponent: React.ComponentType<Props>,
 >(
-  Component: TClass,
+  Component: TComponent,
   fragments: FragmentMap,
   taggedNode: GraphQLTaggedNode,
-): React.ComponentType<TConfig & {componentRef?: any}> {
-  const ComponentClass = getReactComponent(Component);
-  const componentName = getComponentName(Component);
-  const containerName = `Relay(${componentName})`;
+): React.ComponentType<
+  $RelayProps<React$ElementConfig<TComponent>, RelayRefetchProp>,
+> {
+  const containerName = getContainerName(Component);
 
-  class Container extends React.Component<$FlowFixMeProps, ContainerState> {
-    _localVariables: ?Variables;
+  class Container extends React.Component<ContainerProps, ContainerState> {
+    static displayName = containerName;
+
     _refetchSubscription: ?Subscription;
-    _references: Array<Disposable>;
-    _relayContext: RelayContext;
-    _resolver: FragmentSpecResolver;
+    _queryFetcher: ?ReactRelayQueryFetcher;
+    _isUnmounted: boolean;
 
-    constructor(props, context) {
-      super(props, context);
-      const relay = assertRelayContext(context.relay);
-      const {createFragmentSpecResolver} = relay.environment.unstable_internal;
-      this._localVariables = null;
+    constructor(props) {
+      super(props);
+      const relayContext = assertRelayContext(props.__relayContext);
       this._refetchSubscription = null;
-      this._references = [];
-      this._resolver = createFragmentSpecResolver(
-        relay,
+      const {
+        createFragmentSpecResolver,
+      } = relayContext.environment.unstable_internal;
+      // Do not provide a subscription/callback here.
+      // It is possible for this render to be interrupted or aborted,
+      // In which case the subscription would cause a leak.
+      // We will add the subscription in componentDidMount().
+      const resolver = createFragmentSpecResolver(
+        relayContext,
         containerName,
         fragments,
         props,
-        this._handleFragmentDataUpdate,
       );
-      this._relayContext = {
-        environment: this.context.relay.environment,
-        variables: this.context.relay.variables,
-      };
       this.state = {
-        data: this._resolver.resolve(),
-        relayProp: this._buildRelayProp(relay),
+        data: resolver.resolve(),
+        localVariables: null,
+        prevProps: props,
+        prevPropsContext: relayContext,
+        contextForChildren: relayContext,
+        relayProp: getRelayProp(relayContext.environment, this._refetch),
+        resolver,
       };
+      this._isUnmounted = false;
+    }
+
+    componentDidMount() {
+      this._subscribeToNewResolver();
+    }
+
+    componentDidUpdate(prevProps: ContainerProps, prevState: ContainerState) {
+      // If the environment has changed or props point to new records then
+      // previously fetched data and any pending fetches no longer apply:
+      // - Existing references are on the old environment.
+      // - Existing references are based on old variables.
+      // - Pending fetches are for the previous records.
+      if (this.state.resolver !== prevState.resolver) {
+        prevState.resolver.dispose();
+        this._queryFetcher && this._queryFetcher.dispose();
+        this._refetchSubscription && this._refetchSubscription.unsubscribe();
+
+        this._subscribeToNewResolver();
+      }
     }
 
     /**
-     * When new props are received, read data for the new props and subscribe
-     * for updates. Props may be the same in which case previous data and
-     * subscriptions can be reused.
+     * When new props are received, read data for the new props and add it to
+     * state. Props may be the same in which case previous data can be reused.
      */
-    componentWillReceiveProps(nextProps, nextContext) {
-      const context = nullthrows(nextContext);
-      const relay = assertRelayContext(context.relay);
+    static getDerivedStateFromProps(
+      nextProps: ContainerProps,
+      prevState: ContainerState,
+    ): $Shape<ContainerState> | null {
+      // Any props change could impact the query, so we mirror props in state.
+      // This is an unusual pattern, but necessary for this container usecase.
+      const {prevProps} = prevState;
+      const relayContext = assertRelayContext(nextProps.__relayContext);
+
       const {
         createFragmentSpecResolver,
         getDataIDsFromObject,
-      } = relay.environment.unstable_internal;
-      const prevIDs = getDataIDsFromObject(fragments, this.props);
+      } = relayContext.environment.unstable_internal;
+      const prevIDs = getDataIDsFromObject(fragments, prevProps);
       const nextIDs = getDataIDsFromObject(fragments, nextProps);
+
+      let resolver = prevState.resolver;
 
       // If the environment has changed or props point to new records then
       // previously fetched data and any pending fetches no longer apply:
@@ -119,41 +152,55 @@ function createContainerWithFragments<
       // - Existing references are based on old variables.
       // - Pending fetches are for the previous records.
       if (
-        this.context.relay.environment !== relay.environment ||
-        this.context.relay.variables !== relay.variables ||
+        prevState.prevPropsContext.environment !== relayContext.environment ||
+        prevState.prevPropsContext.variables !== relayContext.variables ||
         !areEqual(prevIDs, nextIDs)
       ) {
-        this._release();
-        this._localVariables = null;
-        this._relayContext = {
-          environment: relay.environment,
-          variables: relay.variables,
-        };
-        this._resolver = createFragmentSpecResolver(
-          relay,
+        // Do not provide a subscription/callback here.
+        // It is possible for this render to be interrupted or aborted,
+        // In which case the subscription would cause a leak.
+        // We will add the subscription in componentDidUpdate().
+        resolver = createFragmentSpecResolver(
+          relayContext,
           containerName,
           fragments,
           nextProps,
-          this._handleFragmentDataUpdate,
         );
-        this.setState({relayProp: this._buildRelayProp(relay)});
-      } else if (!this._localVariables) {
-        this._resolver.setProps(nextProps);
+        return {
+          data: resolver.resolve(),
+          localVariables: null,
+          prevProps: nextProps,
+          prevPropsContext: relayContext,
+          contextForChildren: relayContext,
+          relayProp: getRelayProp(
+            relayContext.environment,
+            prevState.relayProp.refetch,
+          ),
+          resolver,
+        };
+      } else if (!prevState.localVariables) {
+        resolver.setProps(nextProps);
       }
-      const data = this._resolver.resolve();
-      if (data !== this.state.data) {
-        this.setState({data});
+      const data = resolver.resolve();
+      if (data !== prevState.data) {
+        return {
+          data,
+          prevProps: nextProps,
+        };
       }
+      return null;
     }
 
     componentWillUnmount() {
-      this._release();
+      this._isUnmounted = true;
+      this.state.resolver.dispose();
+      this._queryFetcher && this._queryFetcher.dispose();
+      this._refetchSubscription && this._refetchSubscription.unsubscribe();
     }
 
-    shouldComponentUpdate(nextProps, nextState, nextContext): boolean {
+    shouldComponentUpdate(nextProps, nextState): boolean {
       // Short-circuit if any Relay-related data has changed
       if (
-        nextContext.relay !== this.context.relay ||
         nextState.data !== this.state.data ||
         nextState.relayProp !== this.state.relayProp
       ) {
@@ -164,28 +211,40 @@ function createContainerWithFragments<
       const keys = Object.keys(nextProps);
       for (let ii = 0; ii < keys.length; ii++) {
         const key = keys[ii];
-        if (
-          !fragments.hasOwnProperty(key) &&
-          !isScalarAndEqual(nextProps[key], this.props[key])
-        ) {
-          return true;
+        if (key === '__relayContext') {
+          if (
+            this.state.prevPropsContext.environment !==
+              nextState.prevPropsContext.environment ||
+            this.state.prevPropsContext.variables !==
+              nextState.prevPropsContext.variables
+          ) {
+            return true;
+          }
+        } else {
+          if (
+            !fragments.hasOwnProperty(key) &&
+            !isScalarAndEqual(nextProps[key], this.props[key])
+          ) {
+            return true;
+          }
         }
       }
       return false;
     }
 
-    _release(): void {
-      this._resolver.dispose();
-      this._references.forEach(disposable => disposable.dispose());
-      this._references.length = 0;
-      this._refetchSubscription && this._refetchSubscription.unsubscribe();
-    }
+    _subscribeToNewResolver() {
+      const {data, resolver} = this.state;
 
-    _buildRelayProp(relay: RelayContext): RelayRefetchProp {
-      return {
-        environment: relay.environment,
-        refetch: this._refetch,
-      };
+      // Event listeners are only safe to add during the commit phase,
+      // So they won't leak if render is interrupted or errors.
+      resolver.setCallback(this._handleFragmentDataUpdate);
+
+      // External values could change between render and commit.
+      // Check for this case, even though it requires an extra store read.
+      const maybeNewData = resolver.resolve();
+      if (data !== maybeNewData) {
+        this.setState({data: maybeNewData});
+      }
     }
 
     /**
@@ -195,18 +254,36 @@ function createContainerWithFragments<
       const profiler = RelayProfiler.profile(
         'ReactRelayRefetchContainer.handleFragmentDataUpdate',
       );
-      this.setState({data: this._resolver.resolve()}, profiler.stop);
+      const resolverFromThisUpdate = this.state.resolver;
+      this.setState(updatedState => {
+        // If this event belongs to the current data source, update.
+        // Otherwise we should ignore it.
+        if (resolverFromThisUpdate === updatedState.resolver) {
+          return {
+            data: updatedState.resolver.resolve(),
+          };
+        }
+
+        return null;
+      }, profiler.stop);
     };
 
     _getFragmentVariables(): Variables {
       const {
         getVariablesFromObject,
-      } = this.context.relay.environment.unstable_internal;
+      } = this.props.__relayContext.environment.unstable_internal;
       return getVariablesFromObject(
-        this.context.relay.variables,
+        this.props.__relayContext.variables,
         fragments,
         this.props,
       );
+    }
+
+    _getQueryFetcher(): ReactRelayQueryFetcher {
+      if (!this._queryFetcher) {
+        this._queryFetcher = new ReactRelayQueryFetcher();
+      }
+      return this._queryFetcher;
     }
 
     _refetch = (
@@ -214,11 +291,26 @@ function createContainerWithFragments<
         | Variables
         | ((fragmentVariables: Variables) => Variables),
       renderVariables: ?Variables,
-      callback: ?(error: ?Error) => void,
+      observerOrCallback: ?ObserverOrCallback,
       options: ?RefetchOptions,
     ): Disposable => {
+      if (this._isUnmounted) {
+        warning(
+          false,
+          'ReactRelayRefetchContainer: Unexpected call of `refetch` ' +
+            'on unmounted container `%s`. It looks like some instances ' +
+            'of your container still trying to refetch the data but they already ' +
+            'unmounted. Please make sure you clear all timers, intervals, async ' +
+            'calls, etc that may trigger `refetch`.',
+          containerName,
+        );
+        return {
+          dispose() {},
+        };
+      }
+
       const {environment, variables: rootVariables} = assertRelayContext(
-        this.context.relay,
+        this.props.__relayContext,
       );
       let fetchVariables =
         typeof refetchVariables === 'function'
@@ -229,19 +321,28 @@ function createContainerWithFragments<
         ? {...rootVariables, ...renderVariables}
         : fetchVariables;
       const cacheConfig = options ? {force: !!options.force} : undefined;
+
+      const observer =
+        typeof observerOrCallback === 'function'
+          ? {
+              // callback is not exectued on complete or unsubscribe
+              // for backward compatibility
+              next: observerOrCallback,
+              error: observerOrCallback,
+            }
+          : observerOrCallback || ({}: any);
+
       const {
         createOperationSelector,
-        getOperation,
-      } = this.context.relay.environment.unstable_internal;
-      const query = getOperation(taggedNode);
+        getRequest,
+      } = this.props.__relayContext.environment.unstable_internal;
+      const query = getRequest(taggedNode);
       const operation = createOperationSelector(query, fetchVariables);
 
-      // Immediately retain the results of the query to prevent cached
-      // data from being evicted
-      const reference = environment.retain(operation.root);
-      this._references.push(reference);
-
-      this._localVariables = fetchVariables;
+      // TODO: T26288752 find a better way
+      /* eslint-disable lint/react-state-props-mutation */
+      this.state.localVariables = fetchVariables;
+      /* eslint-enable lint/react-state-props-mutation */
 
       // Cancel any previously running refetch.
       this._refetchSubscription && this._refetchSubscription.unsubscribe();
@@ -249,19 +350,30 @@ function createContainerWithFragments<
       // Declare refetchSubscription before assigning it in .start(), since
       // synchronous completion may call callbacks .subscribe() returns.
       let refetchSubscription;
-      environment
-        .execute({operation, cacheConfig})
+      this._getQueryFetcher()
+        .execute({
+          environment,
+          operation,
+          cacheConfig,
+          // TODO (T26430099): Cleanup old references
+          preservePreviousReferences: true,
+        })
         .mergeMap(response => {
-          this._relayContext = {
-            environment: this.context.relay.environment,
-            variables: fragmentVariables,
-          };
-          this._resolver.setVariables(fragmentVariables);
-          return new Observable(sink =>
-            this.setState({data: this._resolver.resolve()}, () => {
-              sink.next();
-              sink.complete();
-            }),
+          this.state.resolver.setVariables(fragmentVariables);
+          return Observable.create(sink =>
+            this.setState(
+              updatedState => ({
+                data: this.state.resolver.resolve(),
+                contextForChildren: {
+                  environment: this.props.__relayContext.environment,
+                  variables: fragmentVariables,
+                },
+              }),
+              () => {
+                sink.next();
+                sink.complete();
+              },
+            ),
           );
         })
         .finally(() => {
@@ -272,11 +384,11 @@ function createContainerWithFragments<
           }
         })
         .subscribe({
+          ...observer,
           start: subscription => {
             this._refetchSubscription = refetchSubscription = subscription;
+            observer.start && observer.start(subscription);
           },
-          next: callback,
-          error: callback,
         });
 
       return {
@@ -286,46 +398,31 @@ function createContainerWithFragments<
       };
     };
 
-    getChildContext(): Object {
-      return {relay: this._relayContext};
-    }
-
     render() {
-      if (ComponentClass) {
-        return (
-          <ComponentClass
-            {...this.props}
+      const {componentRef, __relayContext, ...props} = this.props;
+      const {relayProp, contextForChildren} = this.state;
+      return (
+        <ReactRelayContext.Provider value={contextForChildren}>
+          <Component
+            {...props}
             {...this.state.data}
-            // TODO: Remove the string ref fallback.
-            ref={this.props.componentRef || 'component'}
-            relay={this.state.relayProp}
+            ref={componentRef}
+            relay={relayProp}
           />
-        );
-      } else {
-        // Stateless functional, doesn't support `ref`
-        return React.createElement(Component, {
-          ...this.props,
-          ...this.state.data,
-          relay: this.state.relayProp,
-        });
-      }
+        </ReactRelayContext.Provider>
+      );
     }
   }
   profileContainer(Container, 'ReactRelayRefetchContainer');
-  Container.contextTypes = containerContextTypes;
-  Container.displayName = containerName;
 
-  return (Container: any);
+  return Container;
 }
 
-function assertRelayContext(relay: mixed): RelayContext {
-  invariant(
-    isRelayContext(relay),
-    'ReactRelayRefetchContainer: Expected `context.relay` to be an object ' +
-      'conforming to the `RelayContext` interface, got `%s`.',
-    relay,
-  );
-  return (relay: any);
+function getRelayProp(environment, refetch): RelayRefetchProp {
+  return {
+    environment,
+    refetch,
+  };
 }
 
 /**
@@ -335,23 +432,19 @@ function assertRelayContext(relay: mixed): RelayContext {
  * `fragmentSpec` is memoized once per environment, rather than once per
  * instance of the container constructed/rendered.
  */
-function createContainer<TBase: React.ComponentType<*>>(
-  Component: TBase,
+function createContainer<Props: {}, TComponent: React.ComponentType<Props>>(
+  Component: TComponent,
   fragmentSpec: GraphQLTaggedNode | GeneratedNodeMap,
   taggedNode: GraphQLTaggedNode,
-): TBase {
-  const Container = buildReactRelayContainer(
+): React.ComponentType<
+  $RelayProps<React$ElementConfig<TComponent>, RelayRefetchProp>,
+> {
+  return buildReactRelayContainer(
     Component,
     fragmentSpec,
     (ComponentClass, fragments) =>
       createContainerWithFragments(ComponentClass, fragments, taggedNode),
   );
-  /* $FlowFixMe(>=0.53.0) This comment suppresses an error
-   * when upgrading Flow's support for React. Common errors found when
-   * upgrading Flow's React support are documented at
-   * https://fburl.com/eq7bs81w */
-  Container.childContextTypes = containerContextTypes;
-  return Container;
 }
 
 module.exports = {createContainer, createContainerWithFragments};

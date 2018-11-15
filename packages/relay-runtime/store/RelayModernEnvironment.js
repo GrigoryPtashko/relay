@@ -1,38 +1,36 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayModernEnvironment
  * @flow
  * @format
+ * @emails oncall+relay
  */
 
 'use strict';
 
-const RelayCore = require('RelayCore');
-const RelayDataLoader = require('RelayDataLoader');
-const RelayDefaultHandlerProvider = require('RelayDefaultHandlerProvider');
-const RelayInMemoryRecordSource = require('RelayInMemoryRecordSource');
-const RelayPublishQueue = require('RelayPublishQueue');
+const RelayCore = require('./RelayCore');
+const RelayDataLoader = require('./RelayDataLoader');
+const RelayDefaultHandlerProvider = require('../handlers/RelayDefaultHandlerProvider');
+const RelayInMemoryRecordSource = require('./RelayInMemoryRecordSource');
+const RelayPublishQueue = require('./RelayPublishQueue');
 
-const normalizePayload = require('normalizePayload');
-const normalizeRelayPayload = require('normalizeRelayPayload');
+const invariant = require('invariant');
+const normalizePayload = require('./normalizePayload');
+const normalizeRelayPayload = require('./normalizeRelayPayload');
 const warning = require('warning');
 
-import type {CacheConfig, Disposable} from 'RelayCombinedEnvironmentTypes';
-import type {EnvironmentDebugger} from 'RelayDebugger';
-import type {HandlerProvider} from 'RelayDefaultHandlerProvider';
+import type {HandlerProvider} from '../handlers/RelayDefaultHandlerProvider';
 import type {
+  GraphQLResponse,
   Network,
   PayloadData,
   PayloadError,
   UploadableMap,
-} from 'RelayNetworkTypes';
-import type RelayObservable from 'RelayObservable';
+} from '../network/RelayNetworkTypes';
+import type RelayObservable from '../network/RelayObservable';
 import type {
   Environment,
   MissingFieldHandler,
@@ -43,24 +41,25 @@ import type {
   Snapshot,
   Store,
   StoreUpdater,
-  RelayResponsePayload,
   UnstableEnvironmentCore,
-} from 'RelayStoreTypes';
+} from '../store/RelayStoreTypes';
+import type {CacheConfig, Disposable} from '../util/RelayRuntimeTypes';
 
 export type EnvironmentConfig = {
   configName?: string,
   handlerProvider?: HandlerProvider,
   network: Network,
   store: Store,
+  missingFieldHandlers?: $ReadOnlyArray<MissingFieldHandler>,
 };
 
 class RelayModernEnvironment implements Environment {
   _network: Network;
   _publishQueue: RelayPublishQueue;
   _store: Store;
-  _debugger: ?EnvironmentDebugger;
   configName: ?string;
   unstable_internal: UnstableEnvironmentCore;
+  _missingFieldHandlers: ?$ReadOnlyArray<MissingFieldHandler>;
 
   constructor(config: EnvironmentConfig) {
     this.configName = config.configName;
@@ -74,47 +73,20 @@ class RelayModernEnvironment implements Environment {
 
     (this: any).__setNet = newNet => (this._network = newNet);
 
-    // TODO(#21781004): This adds support for the older Relay Debugger, which
-    // has been replaced with the Relay DevTools global hook below. This logic
-    // should stick around for a release or two to not break support for the
-    // existing debugger. After allowing time to migrate to latest versions,
-    // this code can be removed.
-    if (__DEV__) {
-      const g = typeof global !== 'undefined' ? global : window;
-
-      // Attach the debugger symbol to the global symbol so it can be accessed by
-      // devtools extension.
-      if (!g.__RELAY_DEBUGGER__) {
-        const {RelayDebugger} = require('RelayDebugger');
-        g.__RELAY_DEBUGGER__ = new RelayDebugger();
-      }
-
-      // Setup the runtime part for Native
-      if (typeof g.registerDevtoolsPlugin === 'function') {
-        try {
-          g.registerDevtoolsPlugin(
-            require('relay-debugger-react-native-runtime'),
-          );
-        } catch (error) {
-          // No debugger for you.
-        }
-      }
-
-      const envId = g.__RELAY_DEBUGGER__.registerEnvironment(this);
-      this._debugger = g.__RELAY_DEBUGGER__.getEnvironmentDebugger(envId);
-    } else {
-      this._debugger = null;
-    }
-
     // Register this Relay Environment with Relay DevTools if it exists.
     // Note: this must always be the last step in the constructor.
     const _global =
       typeof global !== 'undefined'
         ? global
-        : typeof window !== 'undefined' ? window : undefined;
+        : typeof window !== 'undefined'
+          ? window
+          : undefined;
     const devToolsHook = _global && _global.__RELAY_DEVTOOLS_HOOK__;
     if (devToolsHook) {
       devToolsHook.registerEnvironment(this);
+    }
+    if (config.missingFieldHandlers != null) {
+      this._missingFieldHandlers = config.missingFieldHandlers;
     }
   }
 
@@ -124,10 +96,6 @@ class RelayModernEnvironment implements Environment {
 
   getNetwork(): Network {
     return this._network;
-  }
-
-  getDebugger(): ?EnvironmentDebugger {
-    return this._debugger;
   }
 
   applyUpdate(optimisticUpdate: OptimisticUpdate): Disposable {
@@ -168,7 +136,13 @@ class RelayModernEnvironment implements Environment {
   }
 
   check(readSelector: Selector): boolean {
-    return this._store.check(readSelector);
+    if (this._missingFieldHandlers == null) {
+      return this._store.check(readSelector);
+    }
+    return this._checkSelectorAndHandleMissingFields(
+      readSelector,
+      this._missingFieldHandlers,
+    );
   }
 
   commitPayload(
@@ -201,8 +175,26 @@ class RelayModernEnvironment implements Environment {
     return this._store.retain(selector);
   }
 
+  _checkSelectorAndHandleMissingFields(
+    selector: Selector,
+    handlers: $ReadOnlyArray<MissingFieldHandler>,
+  ): boolean {
+    const target = new RelayInMemoryRecordSource();
+    const result = RelayDataLoader.check(
+      this._store.getSource(),
+      target,
+      selector,
+      handlers,
+    );
+    if (target.size() > 0) {
+      this._publishQueue.commitSource(target);
+      this._publishQueue.run();
+    }
+    return result;
+  }
+
   /**
-   * Returns an Observable of RelayResponsePayload resulting from executing the
+   * Returns an Observable of GraphQLResponse resulting from executing the
    * provided Query or Subscription operation, each result of which is then
    * normalized and committed to the publish queue.
    *
@@ -217,21 +209,51 @@ class RelayModernEnvironment implements Environment {
     operation: OperationSelector,
     cacheConfig?: ?CacheConfig,
     updater?: ?SelectorStoreUpdater,
-  }): RelayObservable<RelayResponsePayload> {
-    const {node, variables} = operation;
+  }): RelayObservable<GraphQLResponse> {
+    let optimisticResponse;
     return this._network
-      .execute(node, variables, cacheConfig || {})
-      .map(payload => normalizePayload(node, variables, payload))
+      .execute(operation.node, operation.variables, cacheConfig || {})
       .do({
         next: payload => {
-          this._publishQueue.commitPayload(operation, payload, updater);
-          this._publishQueue.run();
+          const responsePayload = normalizePayload(operation, payload);
+          const {source, fieldPayloads} = responsePayload;
+          if (payload.extensions?.isOptimistic) {
+            invariant(
+              optimisticResponse == null,
+              'environment.execute: only support one optimistic response per ' +
+                'execute.',
+            );
+            optimisticResponse = {
+              source: source,
+              fieldPayloads: fieldPayloads,
+            };
+            this._publishQueue.applyUpdate(optimisticResponse);
+            this._publishQueue.run();
+          } else {
+            if (optimisticResponse) {
+              this._publishQueue.revertUpdate(optimisticResponse);
+              optimisticResponse = undefined;
+            }
+            this._publishQueue.commitPayload(
+              operation,
+              responsePayload,
+              updater,
+            );
+            this._publishQueue.run();
+          }
         },
+      })
+      .finally(() => {
+        if (optimisticResponse) {
+          this._publishQueue.revertUpdate(optimisticResponse);
+          optimisticResponse = undefined;
+          this._publishQueue.run();
+        }
       });
   }
 
   /**
-   * Returns an Observable of RelayResponsePayload resulting from executing the
+   * Returns an Observable of GraphQLResponse resulting from executing the
    * provided Mutation operation, the result of which is then normalized and
    * committed to the publish queue along with an optional optimistic response
    * or updater.
@@ -252,10 +274,7 @@ class RelayModernEnvironment implements Environment {
     optimisticResponse?: ?Object,
     updater?: ?SelectorStoreUpdater,
     uploadables?: ?UploadableMap,
-  |}): RelayObservable<RelayResponsePayload> {
-    const {node, variables} = operation;
-    const mutationUid = nextMutationUid();
-
+  |}): RelayObservable<GraphQLResponse> {
     let optimisticUpdate;
     if (optimisticResponse || optimisticUpdater) {
       optimisticUpdate = {
@@ -266,67 +285,38 @@ class RelayModernEnvironment implements Environment {
     }
 
     return this._network
-      .execute(node, variables, {force: true}, uploadables)
-      .map(payload => normalizePayload(node, variables, payload))
+      .execute(operation.node, operation.variables, {force: true}, uploadables)
       .do({
         start: () => {
           if (optimisticUpdate) {
-            this._recordDebuggerEvent({
-              eventName: 'optimistic_update',
-              mutationUid,
-              operation,
-              fn: () => {
-                if (optimisticUpdate) {
-                  this._publishQueue.applyUpdate(optimisticUpdate);
-                }
-                this._publishQueue.run();
-              },
-            });
+            this._publishQueue.applyUpdate(optimisticUpdate);
+            this._publishQueue.run();
           }
         },
         next: payload => {
-          this._recordDebuggerEvent({
-            eventName: 'request_commit',
-            mutationUid,
+          if (optimisticUpdate) {
+            this._publishQueue.revertUpdate(optimisticUpdate);
+            optimisticUpdate = undefined;
+          }
+          this._publishQueue.commitPayload(
             operation,
-            payload,
-            fn: () => {
-              if (optimisticUpdate) {
-                this._publishQueue.revertUpdate(optimisticUpdate);
-                optimisticUpdate = undefined;
-              }
-              this._publishQueue.commitPayload(operation, payload, updater);
-              this._publishQueue.run();
-            },
-          });
+            normalizePayload(operation, payload),
+            updater,
+          );
+          this._publishQueue.run();
         },
         error: error => {
-          this._recordDebuggerEvent({
-            eventName: 'request_error',
-            mutationUid,
-            operation,
-            payload: error,
-            fn: () => {
-              if (optimisticUpdate) {
-                this._publishQueue.revertUpdate(optimisticUpdate);
-              }
-              this._publishQueue.run();
-            },
-          });
+          if (optimisticUpdate) {
+            this._publishQueue.revertUpdate(optimisticUpdate);
+            optimisticUpdate = undefined;
+            this._publishQueue.run();
+          }
         },
         unsubscribe: () => {
           if (optimisticUpdate) {
-            this._recordDebuggerEvent({
-              eventName: 'optimistic_revert',
-              mutationUid,
-              operation,
-              fn: () => {
-                if (optimisticUpdate) {
-                  this._publishQueue.revertUpdate(optimisticUpdate);
-                }
-                this._publishQueue.run();
-              },
-            });
+            this._publishQueue.revertUpdate(optimisticUpdate);
+            optimisticUpdate = undefined;
+            this._publishQueue.run();
           }
         },
       });
@@ -345,40 +335,12 @@ class RelayModernEnvironment implements Environment {
     cacheConfig?: ?CacheConfig,
     onCompleted?: ?() => void,
     onError?: ?(error: Error) => void,
-    onNext?: ?(payload: RelayResponsePayload) => void,
+    onNext?: ?(payload: GraphQLResponse) => void,
     operation: OperationSelector,
   }): Disposable {
     warning(
       false,
       'environment.sendQuery() is deprecated. Update to the latest ' +
-        'version of react-relay, and use environment.execute().',
-    );
-    return this.execute({operation, cacheConfig}).subscribeLegacy({
-      onNext,
-      onError,
-      onCompleted,
-    });
-  }
-
-  /**
-   * @deprecated Use Environment.execute().subscribe()
-   */
-  streamQuery({
-    cacheConfig,
-    onCompleted,
-    onError,
-    onNext,
-    operation,
-  }: {
-    cacheConfig?: ?CacheConfig,
-    onCompleted?: ?() => void,
-    onError?: ?(error: Error) => void,
-    onNext?: ?(payload: RelayResponsePayload) => void,
-    operation: OperationSelector,
-  }): Disposable {
-    warning(
-      false,
-      'environment.streamQuery() is deprecated. Update to the latest ' +
         'version of react-relay, and use environment.execute().',
     );
     return this.execute({operation, cacheConfig}).subscribeLegacy({
@@ -430,84 +392,6 @@ class RelayModernEnvironment implements Environment {
       onCompleted,
     });
   }
-
-  /**
-   * @deprecated Use Environment.execute().subscribe()
-   */
-  sendSubscription({
-    onCompleted,
-    onNext,
-    onError,
-    operation,
-    updater,
-  }: {
-    onCompleted?: ?(errors: ?Array<PayloadError>) => void,
-    onNext?: ?(payload: RelayResponsePayload) => void,
-    onError?: ?(error: Error) => void,
-    operation: OperationSelector,
-    updater?: ?SelectorStoreUpdater,
-  }): Disposable {
-    warning(
-      false,
-      'environment.sendSubscription() is deprecated. Update to the latest ' +
-        'version of react-relay, and use environment.execute().',
-    );
-    return this.execute({
-      operation,
-      updater,
-      cacheConfig: {force: true},
-    }).subscribeLegacy({onNext, onError, onCompleted});
-  }
-
-  _recordDebuggerEvent({
-    eventName,
-    mutationUid,
-    operation,
-    payload,
-    fn,
-  }: {
-    eventName: string,
-    mutationUid: string,
-    operation: OperationSelector,
-    payload?: any,
-    fn: () => void,
-  }) {
-    if (this._debugger) {
-      this._debugger.recordMutationEvent({
-        eventName,
-        payload,
-        fn,
-        mutation: operation,
-        seriesId: mutationUid,
-      });
-    } else {
-      fn();
-    }
-  }
-
-  checkSelectorAndUpdateStore(
-    selector: Selector,
-    handlers: Array<MissingFieldHandler>,
-  ): boolean {
-    const target = new RelayInMemoryRecordSource();
-    const result = RelayDataLoader.check(
-      this._store.getSource(),
-      target,
-      selector,
-      handlers,
-    );
-    if (target.size() > 0) {
-      this._publishQueue.commitSource(target);
-      this._publishQueue.run();
-    }
-    return result;
-  }
-}
-
-let mutationUidCounter = 0;
-const mutationUidPrefix = Math.random().toString();
-function nextMutationUid() {
-  return mutationUidPrefix + mutationUidCounter++;
 }
 
 // Add a sigil for detection by `isRelayModernEnvironment()` to avoid a

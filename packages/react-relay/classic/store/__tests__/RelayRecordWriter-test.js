@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails oncall+relay
  * @format
@@ -12,19 +10,20 @@
 
 'use strict';
 
-const GraphQLRange = require('GraphQLRange');
-const RelayClassic = require('RelayClassic');
+const GraphQLRange = require('../../legacy/store/GraphQLRange');
+const RelayClassic = require('../../RelayPublic');
 const RelayMockCacheManager = require('RelayMockCacheManager');
-const RelayQueryPath = require('RelayQueryPath');
-const RelayRecordStatusMap = require('RelayRecordStatusMap');
-const RelayRecordStore = require('RelayRecordStore');
-const RelayRecordWriter = require('RelayRecordWriter');
+const RelayQueryPath = require('../../query/RelayQueryPath');
+const RelayRecordStatusMap = require('../RelayRecordStatusMap');
+const RelayRecordStore = require('../RelayRecordStore');
+const RelayRecordWriter = require('../RelayRecordWriter');
 const RelayTestUtils = require('RelayTestUtils');
 
-const generateClientID = require('generateClientID');
+const generateClientID = require('../../legacy/store/generateClientID');
 
-const {APPEND, PREPEND, REMOVE} = require('GraphQLMutatorConstants');
-const {ConnectionInterface} = require('RelayRuntime');
+const {RangeOperations, ConnectionInterface} = require('relay-runtime');
+
+const {APPEND, PREPEND, REMOVE} = RangeOperations;
 
 describe('RelayRecordWriter', () => {
   let HAS_NEXT_PAGE, HAS_PREV_PAGE;

@@ -1,12 +1,9 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule getClassicTransformer
  * @flow
  * @format
  */
@@ -75,11 +72,11 @@ function getSchema(
   } else if (introspection.data && introspection.data.__schema) {
     return buildClientSchema((introspection.data: any));
   } else if (introspection.kind && introspection.kind === 'Document') {
-    return buildASTSchema(introspection);
+    return buildASTSchema(introspection, {assumeValid: true});
   }
 
   throw new Error(
-    'Invalid introspection data supplied to the Babel Relay plugin. The ' +
+    'Invalid introspection data supplied to babel-plugin-relay. The ' +
       'resulting schema is not an object with a `__schema` property or ' +
       'a schema IDL language.',
   );

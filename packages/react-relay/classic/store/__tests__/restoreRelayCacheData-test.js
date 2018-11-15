@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails oncall+relay
  * @format
@@ -12,24 +10,25 @@
 
 'use strict';
 
-jest.enableAutomock().mock('warning');
-jest.useFakeTimers();
+jest
+  .mock('warning')
+  .mock('../../legacy/store/GraphQLRange')
+  .useFakeTimers();
 
 require('configureForRelayOSS');
 
-const GraphQLRange = require('GraphQLRange');
-const RelayClassic = require('RelayClassic');
-const RelayChangeTracker = require('RelayChangeTracker');
-const RelayGarbageCollector = require('RelayGarbageCollector');
-const RelayQueryPath = require('RelayQueryPath');
-const RelayRecordStore = require('RelayRecordStore');
+const GraphQLRange = require('../../legacy/store/GraphQLRange');
+const RelayClassic = require('../../RelayPublic');
+const RelayChangeTracker = require('../RelayChangeTracker');
+const RelayQueryPath = require('../../query/RelayQueryPath');
+const RelayRecordStore = require('../RelayRecordStore');
 const RelayTestUtils = require('RelayTestUtils');
 
 const invariant = require('invariant');
 const {
   restoreFragmentDataFromCache,
   restoreQueriesDataFromCache,
-} = require('restoreRelayCacheData');
+} = require('../restoreRelayCacheData');
 
 describe('restoreRelayCacheData', () => {
   const {getNode} = RelayTestUtils;
@@ -53,7 +52,6 @@ describe('restoreRelayCacheData', () => {
     dataID,
     diskCacheData,
     fragment,
-    garbageCollector,
     path,
     queries,
     records,
@@ -102,7 +100,6 @@ describe('restoreRelayCacheData', () => {
         store,
         cachedRecords,
         cachedRootCallMap,
-        garbageCollector,
         cacheManager,
         changeTracker,
         callbacks,
@@ -115,7 +112,6 @@ describe('restoreRelayCacheData', () => {
         store,
         cachedRecords,
         cachedRootCallMap,
-        garbageCollector,
         cacheManager,
         changeTracker,
         callbacks,
@@ -1050,40 +1046,6 @@ describe('restoreRelayCacheData', () => {
         },
       });
     });
-
-    it('registers new records with the garbage collector', () => {
-      const garbageCollector = new RelayGarbageCollector();
-      RelayGarbageCollector.prototype.register = jest.fn();
-      const queries = {
-        q0: getNode(
-          RelayClassic.QL`
-          query {
-            node(id: "123") {
-              id
-            }
-          }
-        `,
-        ),
-      };
-      const records = {};
-      const diskCacheData = {
-        '123': {
-          __dataID__: '123',
-          __typename: 'User',
-          id: '123',
-        },
-      };
-      performQueriesRestore(queries, {
-        diskCacheData,
-        garbageCollector,
-        records,
-      });
-
-      jest.runAllTimers();
-
-      expect(garbageCollector.register.mock.calls.length).toBe(1);
-      expect(garbageCollector.register.mock.calls[0][0]).toBe('123');
-    });
   });
 
   // Most field types are already tested in the normal read function above.
@@ -1372,11 +1334,12 @@ describe('restoreRelayCacheData', () => {
         },
       };
 
-      const {
-        abort,
-        callbacks,
-        store,
-      } = performFragmentRestore(dataID, fragment, path, {diskCacheData});
+      const {abort, callbacks, store} = performFragmentRestore(
+        dataID,
+        fragment,
+        path,
+        {diskCacheData},
+      );
 
       abort();
       // this would read 1055790163 from cache if not aborted
@@ -1414,11 +1377,12 @@ describe('restoreRelayCacheData', () => {
         },
       };
 
-      const {
-        abort,
-        callbacks,
-        store,
-      } = performFragmentRestore(dataID, fragment, path, {diskCacheData});
+      const {abort, callbacks, store} = performFragmentRestore(
+        dataID,
+        fragment,
+        path,
+        {diskCacheData},
+      );
 
       abort();
       // The read would fail since `name` is missing from cached data.

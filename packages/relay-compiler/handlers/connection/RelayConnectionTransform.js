@@ -1,13 +1,10 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
- * @providesModule RelayConnectionTransform
  * @format
  */
 
@@ -17,14 +14,7 @@ const RelayParser = require('../../core/RelayParser');
 
 const invariant = require('invariant');
 
-const {
-  getLiteralArgumentValues,
-  IRTransformer,
-  SchemaUtils,
-} = require('../../graphql-compiler/GraphQLCompilerPublic');
 const {AFTER, BEFORE, FIRST, KEY, LAST} = require('./RelayConnectionConstants');
-// TODO T21875029 ../../../relay-runtime/RelayRuntime
-const {ConnectionInterface} = require('RelayRuntime');
 const {
   assertCompositeType,
   GraphQLInterfaceType,
@@ -34,28 +24,35 @@ const {
   GraphQLUnionType,
   parse,
 } = require('graphql');
+const {
+  getLiteralArgumentValues,
+  IRTransformer,
+  SchemaUtils,
+} = require('graphql-compiler');
+const {ConnectionInterface} = require('relay-runtime');
 
 import type {
   Argument,
   Fragment,
   InlineFragment,
   LinkedField,
+  MatchField,
   Root,
   CompilerContext,
-} from '../../graphql-compiler/GraphQLCompilerPublic';
-// TODO T21875029 ../../../relay-runtime/handlers/connection/RelayConnectionHandler
-import type {ConnectionMetadata} from 'RelayConnectionHandler';
+} from 'graphql-compiler';
 import type {GraphQLType} from 'graphql';
+import type {ConnectionMetadata} from 'relay-runtime';
 
 type Options = {
   // The current path
   path: Array<?string>,
   // Metadata recorded for @connection fields
   connectionMetadata: Array<ConnectionMetadata>,
-  definitionName: ?string,
+  definitionName: string,
 };
 
 const CONNECTION = 'connection';
+const HANDLER = 'handler';
 
 /**
  * @public
@@ -67,24 +64,25 @@ const CONNECTION = 'connection';
  * - Inserts a sub-fragment on the field to ensure that standard connection
  *   fields are fetched (e.g. cursors, node ids, page info).
  */
-function transform(context: CompilerContext): CompilerContext {
+function relayConnectionTransform(context: CompilerContext): CompilerContext {
   return IRTransformer.transform(
     context,
     {
       Fragment: visitFragmentOrRoot,
-      LinkedField: visitLinkedField,
+      LinkedField: visitLinkedOrMatchField,
+      MatchField: visitLinkedOrMatchField,
       Root: visitFragmentOrRoot,
     },
-    () => ({
+    node => ({
       path: [],
       connectionMetadata: [],
-      definitionName: null,
+      definitionName: node.name,
     }),
   );
 }
 
 const SCHEMA_EXTENSION =
-  'directive @connection(key: String!, filters: [String]) on FIELD';
+  'directive @connection(key: String!, filters: [String], handler: String) on FIELD';
 
 /**
  * @internal
@@ -93,12 +91,8 @@ function visitFragmentOrRoot<N: Fragment | Root>(
   node: N,
   options: Options,
 ): ?N {
-  const passedOptions = {
-    ...options,
-    definitionName: node.name,
-  };
-  const transformedNode = this.traverse(node, passedOptions);
-  const connectionMetadata = passedOptions.connectionMetadata;
+  const transformedNode = this.traverse(node, options);
+  const connectionMetadata = options.connectionMetadata;
   if (connectionMetadata.length) {
     return {
       ...transformedNode,
@@ -114,7 +108,10 @@ function visitFragmentOrRoot<N: Fragment | Root>(
 /**
  * @internal
  */
-function visitLinkedField(field: LinkedField, options: Options): LinkedField {
+function visitLinkedOrMatchField<T: LinkedField | MatchField>(
+  field: T,
+  options: Options,
+): T {
   const isPlural =
     SchemaUtils.getNullableType(field.type) instanceof GraphQLList;
   options.path.push(isPlural ? null : field.alias || field.name);
@@ -127,11 +124,6 @@ function visitLinkedField(field: LinkedField, options: Options): LinkedField {
     return transformedField;
   }
   const {definitionName} = options;
-  invariant(
-    definitionName,
-    'RelayConnectionTransform: Transform error, expected a name to have ' +
-      'been set by the parent operation or fragment definition.',
-  );
   validateConnectionSelection(definitionName, transformedField);
   validateConnectionType(definitionName, transformedField.type);
 
@@ -149,6 +141,9 @@ function visitLinkedField(field: LinkedField, options: Options): LinkedField {
     direction = 'backward';
     countArg = lastArg;
     cursorArg = findArg(transformedField, BEFORE);
+  } else if (lastArg && firstArg) {
+    direction = 'bidirectional';
+    // TODO(T26511885) Maybe add connection metadata to this case
   }
   const countVariable =
     countArg && countArg.value.kind === 'Variable'
@@ -166,26 +161,30 @@ function visitLinkedField(field: LinkedField, options: Options): LinkedField {
   });
   options.path.pop();
 
-  const {key, filters} = getLiteralArgumentValues(connectionDirective.args);
-  invariant(
-    typeof key === 'string',
-    'RelayConnectionTransform: Expected the %s argument to @%s to ' +
-      'be a string literal for field %s',
-    KEY,
-    CONNECTION,
-    field.name,
+  const {handler, key, filters} = getLiteralArgumentValues(
+    connectionDirective.args,
   );
-  const postfix = `${field.alias || field.name}`;
-  invariant(
-    key.endsWith('_' + postfix),
-    'RelayConnectionTransform: Expected the %s argument to @%s to ' +
-      'be of form <SomeName>_%s, but get %s. For detailed explanation, check out the dex page ' +
-      'https://facebook.github.io/relay/docs/pagination-container.html#connection-directive',
-    KEY,
-    CONNECTION,
-    postfix,
-    key,
-  );
+  if (handler != null && typeof handler !== 'string') {
+    throw new Error(
+      `RelayConnectionTransform: Expected the ${HANDLER} argument to ` +
+        `@${CONNECTION} to be a string literal for field ${field.name}.`,
+    );
+  }
+  if (typeof key !== 'string') {
+    throw new Error(
+      `RelayConnectionTransform: Expected the ${KEY} argument to ` +
+        `@${CONNECTION} to be a string literal for field ${field.name}.`,
+    );
+  }
+  const postfix = field.alias || field.name;
+  if (!key.endsWith('_' + postfix)) {
+    throw new Error(
+      `RelayConnectionTransform: Expected the ${KEY} argument to ` +
+        `@${CONNECTION} to be of form <SomeName>_${postfix}, got '${key}'. ` +
+        'For detailed explanation, check out ' +
+        'https://facebook.github.io/relay/docs/en/pagination-container.html#connection',
+    );
+  }
 
   const generateFilters = () => {
     const filteredVariableArgs = field.args
@@ -201,7 +200,7 @@ function visitLinkedField(field: LinkedField, options: Options): LinkedField {
   };
 
   const handle = {
-    name: CONNECTION,
+    name: handler ?? CONNECTION,
     key,
     filters: filters || generateFilters(),
   };
@@ -237,7 +236,7 @@ function visitLinkedField(field: LinkedField, options: Options): LinkedField {
 function generateConnectionFragment(
   context: CompilerContext,
   type: GraphQLType,
-  direction: 'forward' | 'backward',
+  direction: 'forward' | 'backward' | 'bidirectional',
 ): InlineFragment {
   const {
     CURSOR,
@@ -260,8 +259,15 @@ function generateConnectionFragment(
       ${END_CURSOR}
       ${HAS_NEXT_PAGE}
     }`;
+  } else if (direction === 'backward') {
+    pageInfo += `{
+      ${HAS_PREV_PAGE}
+      ${START_CURSOR}
+    }`;
   } else {
     pageInfo += `{
+      ${END_CURSOR}
+      ${HAS_NEXT_PAGE}
       ${HAS_PREV_PAGE}
       ${START_CURSOR}
     }`;
@@ -285,7 +291,7 @@ function generateConnectionFragment(
     fragmentAST && fragmentAST.kind === 'FragmentDefinition',
     'RelayConnectionTransform: Expected a fragment definition AST.',
   );
-  const fragment = RelayParser.transform(context.schema, fragmentAST);
+  const fragment = RelayParser.transform(context.clientSchema, fragmentAST);
   invariant(
     fragment && fragment.kind === 'Fragment',
     'RelayConnectionTransform: Expected a connection fragment.',
@@ -322,27 +328,24 @@ function validateConnectionSelection(
 ): void {
   const {EDGES} = ConnectionInterface.get();
 
-  invariant(
-    findArg(field, FIRST) || findArg(field, LAST),
-    'RelayConnectionTransform: Expected field `%s: %s` to have a %s or %s ' +
-      'argument in document `%s`.',
-    field.name,
-    field.type,
-    FIRST,
-    LAST,
-    definitionName,
-  );
-  invariant(
-    field.selections.some(
+  if (!findArg(field, FIRST) && !findArg(field, LAST)) {
+    throw new Error(
+      `RelayConnectionTransform: Expected field \`${field.name}: ` +
+        `${String(field.type)}\` to have a ${FIRST} or ${LAST} argument in ` +
+        `document \`${definitionName}\`.`,
+    );
+  }
+  if (
+    !field.selections.some(
       selection => selection.kind === 'LinkedField' && selection.name === EDGES,
-    ),
-    'RelayConnectionTransform: Expected field `%s: %s` to have a %s ' +
-      'selection in document `%s`.',
-    field.name,
-    field.type,
-    EDGES,
-    definitionName,
-  );
+    )
+  ) {
+    throw new Error(
+      `RelayConnectionTransform: Expected field \`${field.name}: ` +
+        `${String(field.type)}\` to have a ${EDGES} selection in document ` +
+        `\`${definitionName}\`.`,
+    );
+  }
 }
 
 /**
@@ -414,39 +417,29 @@ function validateConnectionType(
     definitionName,
   );
   const nodeType = SchemaUtils.getNullableType(node.type);
-  if (
-    !(
-      nodeType instanceof GraphQLInterfaceType ||
+  invariant(
+    nodeType instanceof GraphQLInterfaceType ||
       nodeType instanceof GraphQLUnionType ||
-      nodeType instanceof GraphQLObjectType
-    )
-  ) {
-    invariant(
-      false,
-      'RelayConnectionTransform: Expected type `%s` to have an %s.%s field' +
-        'for which the type is an interface, object, or union in document `%s`.',
-      type,
-      EDGES,
-      NODE,
-      definitionName,
-    );
-  }
+      nodeType instanceof GraphQLObjectType,
+    'RelayConnectionTransform: Expected type `%s` to have an %s.%s field' +
+      'for which the type is an interface, object, or union in document `%s`.',
+    type,
+    EDGES,
+    NODE,
+    definitionName,
+  );
 
   const cursor = edgeType.getFields()[CURSOR];
-  if (
-    !cursor ||
-    !(SchemaUtils.getNullableType(cursor.type) instanceof GraphQLScalarType)
-  ) {
-    invariant(
-      false,
-      'RelayConnectionTransform: Expected type `%s` to have an ' +
-        '%s.%s field for which the type is a scalar in document `%s`.',
-      type,
-      EDGES,
-      CURSOR,
-      definitionName,
-    );
-  }
+  invariant(
+    cursor &&
+      SchemaUtils.getNullableType(cursor.type) instanceof GraphQLScalarType,
+    'RelayConnectionTransform: Expected type `%s` to have an ' +
+      '%s.%s field for which the type is a scalar in document `%s`.',
+    type,
+    EDGES,
+    CURSOR,
+    definitionName,
+  );
 
   const pageInfo = typeFields[PAGE_INFO];
   invariant(
@@ -458,45 +451,34 @@ function validateConnectionType(
     definitionName,
   );
   const pageInfoType = SchemaUtils.getNullableType(pageInfo.type);
-  if (!(pageInfoType instanceof GraphQLObjectType)) {
-    invariant(
-      false,
-      'RelayConnectionTransform: Expected type `%s` to have a %s field for ' +
-        'which the type is an object in document `%s`.',
-      type,
-      PAGE_INFO,
-      definitionName,
-    );
-  }
+  invariant(
+    pageInfoType instanceof GraphQLObjectType,
+    'RelayConnectionTransform: Expected type `%s` to have a %s field for ' +
+      'which the type is an object in document `%s`.',
+    type,
+    PAGE_INFO,
+    definitionName,
+  );
 
-  [
-    END_CURSOR,
-    HAS_NEXT_PAGE,
-    HAS_PREV_PAGE,
-    START_CURSOR,
-  ].forEach(fieldName => {
-    const pageInfoField = pageInfoType.getFields()[fieldName];
-    if (
-      !pageInfoField ||
-      !(
-        SchemaUtils.getNullableType(pageInfoField.type) instanceof
-        GraphQLScalarType
-      )
-    ) {
+  [END_CURSOR, HAS_NEXT_PAGE, HAS_PREV_PAGE, START_CURSOR].forEach(
+    fieldName => {
+      const pageInfoField = pageInfoType.getFields()[fieldName];
       invariant(
-        false,
+        pageInfoField &&
+          SchemaUtils.getNullableType(pageInfoField.type) instanceof
+            GraphQLScalarType,
         'RelayConnectionTransform: Expected type `%s` to have an ' +
           '%s field for which the type is an scalar in document `%s`.',
         pageInfo.type,
         fieldName,
         definitionName,
       );
-    }
-  });
+    },
+  );
 }
 
 module.exports = {
   CONNECTION,
   SCHEMA_EXTENSION,
-  transform,
+  transform: relayConnectionTransform,
 };

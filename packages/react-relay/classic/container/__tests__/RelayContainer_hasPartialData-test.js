@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails oncall+relay
  * @format
@@ -12,17 +10,17 @@
 
 'use strict';
 
-jest.enableAutomock();
+jest
+  .mock('../../legacy/store/GraphQLStoreQueryResolver')
+  .mock('../../route/RelayRoute');
 
 require('configureForRelayOSS');
 
-jest.unmock('RelayContainer');
-
-const GraphQLStoreQueryResolver = require('GraphQLStoreQueryResolver');
+const GraphQLStoreQueryResolver = require('../../legacy/store/GraphQLStoreQueryResolver');
 const React = require('React');
-const RelayClassic = require('RelayClassic');
-const RelayEnvironment = require('RelayEnvironment');
-const RelayRecordStatusMap = require('RelayRecordStatusMap');
+const RelayClassic = require('../../RelayPublic');
+const RelayEnvironment = require('../../store/RelayEnvironment');
+const RelayRecordStatusMap = require('../../store/RelayRecordStatusMap');
 const RelayTestUtils = require('RelayTestUtils');
 
 describe('RelayContainer.hasPartialData', () => {

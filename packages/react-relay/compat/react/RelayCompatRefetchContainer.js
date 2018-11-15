@@ -1,25 +1,27 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayCompatRefetchContainer
  * @flow
  * @format
  */
 
 'use strict';
 
-const ReactRelayRefetchContainer = require('ReactRelayRefetchContainer');
-const RelayPropTypes = require('RelayPropTypes');
+const React = require('React');
+const ReactRelayRefetchContainer = require('../../modern/ReactRelayRefetchContainer');
 
-const {buildCompatContainer} = require('ReactRelayCompatContainerBuilder');
+const {buildCompatContainer} = require('../ReactRelayCompatContainerBuilder');
 
-import type {GeneratedNodeMap} from 'ReactRelayTypes';
-import type {GraphQLTaggedNode} from 'RelayModernGraphQLTag';
+import type {
+  $RelayProps,
+  GeneratedNodeMap,
+  RelayRefetchProp,
+} from '../../modern/ReactRelayTypes';
+import type {RelayCompatContainer} from './RelayCompatTypes';
+import type {GraphQLTaggedNode} from 'relay-runtime';
 
 /**
  * Wrap the basic `createContainer()` function with logic to adapt to the
@@ -28,12 +30,14 @@ import type {GraphQLTaggedNode} from 'RelayModernGraphQLTag';
  * `fragmentSpec` is memoized once per environment, rather than once per
  * instance of the container constructed/rendered.
  */
-function createContainer<TBase: React$ComponentType<*>>(
-  Component: TBase,
+function createContainer<Props: {}, TComponent: React.ComponentType<Props>>(
+  Component: TComponent,
   fragmentSpec: GraphQLTaggedNode | GeneratedNodeMap,
   taggedNode: GraphQLTaggedNode,
-): TBase {
-  const Container = buildCompatContainer(
+): RelayCompatContainer<
+  $RelayProps<React$ElementConfig<TComponent>, RelayRefetchProp>,
+> {
+  return buildCompatContainer(
     Component,
     (fragmentSpec: any),
     (ComponentClass, fragments) => {
@@ -44,14 +48,6 @@ function createContainer<TBase: React$ComponentType<*>>(
       );
     },
   );
-  /* $FlowFixMe(>=0.53.0) This comment suppresses an error
-   * when upgrading Flow's support for React. Common errors found when
-   * upgrading Flow's React support are documented at
-   * https://fburl.com/eq7bs81w */
-  Container.childContextTypes = {
-    relay: RelayPropTypes.Relay,
-  };
-  return Container;
 }
 
 module.exports = {createContainer};

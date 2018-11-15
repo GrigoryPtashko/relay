@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @format
  * @emails oncall+relay
@@ -14,14 +12,11 @@
 
 jest.mock('generateClientID');
 
-const RelayInMemoryRecordSource = require('RelayInMemoryRecordSource');
-const RelayReferenceMarker = require('RelayReferenceMarker');
-const RelayStoreUtils = require('RelayStoreUtils');
+const RelayInMemoryRecordSource = require('../RelayInMemoryRecordSource');
 const RelayModernTestUtils = require('RelayModernTestUtils');
-const Set = require('Set');
 
-const {mark} = RelayReferenceMarker;
-const {ROOT_ID} = RelayStoreUtils;
+const {mark} = require('../RelayReferenceMarker');
+const {ROOT_ID} = require('../RelayStoreUtils');
 
 describe('RelayReferenceMarker', () => {
   const {generateAndCompile} = RelayModernTestUtils;
@@ -36,8 +31,8 @@ describe('RelayReferenceMarker', () => {
         id: '1',
         __typename: 'User',
         firstName: 'Alice',
-        'friends{"first":3}': {__ref: 'client:1'},
-        'profilePicture{"size":32}': {__ref: 'client:4'},
+        'friends(first:3)': {__ref: 'client:1'},
+        'profilePicture(size:32)': {__ref: 'client:4'},
       },
       '2': {
         __id: '2',
@@ -78,7 +73,7 @@ describe('RelayReferenceMarker', () => {
       'client:root': {
         __id: 'client:root',
         __typename: '__Root',
-        'node{"id":"1"}': {__ref: '1'},
+        'node(id:"1")': {__ref: '1'},
       },
     };
 
@@ -127,7 +122,7 @@ describe('RelayReferenceMarker', () => {
       source,
       {
         dataID: ROOT_ID,
-        node: FooQuery.query,
+        node: FooQuery.operation,
         variables: {id: '1', size: 32},
       },
       references,
@@ -149,7 +144,7 @@ describe('RelayReferenceMarker', () => {
       '1': {
         __id: '1',
         __typename: 'User',
-        'friends{"first":1}': {__ref: 'client:1'},
+        'friends(first:1)': {__ref: 'client:1'},
         __friends_bestFriends: {__ref: 'client:bestFriends'},
       },
       '2': {
@@ -191,7 +186,7 @@ describe('RelayReferenceMarker', () => {
       'client:root': {
         __id: 'client:root',
         __typename: '__Root',
-        'node{"id":"1"}': {__ref: '1'},
+        'node(id:"1")': {__ref: '1'},
       },
     };
     source = new RelayInMemoryRecordSource(data);
@@ -219,7 +214,7 @@ describe('RelayReferenceMarker', () => {
       source,
       {
         dataID: ROOT_ID,
-        node: UserProfile.query,
+        node: UserProfile.operation,
         variables: {id: '1'},
       },
       references,
@@ -241,11 +236,11 @@ describe('RelayReferenceMarker', () => {
       '1': {
         __id: '1',
         __typename: 'User',
-        'friends{"first":1,"orderby":["first name"]}': {__ref: 'client:1'},
-        '__UserProfile_friends_bestFriends{"orderby":["first name"]}': {
+        'friends(first:1,orderby:["first name"])': {__ref: 'client:1'},
+        '__UserProfile_friends_bestFriends(orderby:["first name"])': {
           __ref: 'client:bestFriends',
         },
-        '__UserProfile_friends_bestFriends{"orderby":["last name"]}': {
+        '__UserProfile_friends_bestFriends(orderby:["last name"])': {
           __ref: 'client:bestFriendsByLastName',
         },
       },
@@ -295,7 +290,7 @@ describe('RelayReferenceMarker', () => {
       'client:root': {
         __id: 'client:root',
         __typename: '__Root',
-        'node{"id":"1"}': {__ref: '1'},
+        'node(id:"1")': {__ref: '1'},
       },
     };
     source = new RelayInMemoryRecordSource(data);
@@ -327,7 +322,7 @@ describe('RelayReferenceMarker', () => {
       source,
       {
         dataID: ROOT_ID,
-        node: UserProfile.query,
+        node: UserProfile.operation,
         variables: {id: '1', orderby: ['first name']},
       },
       references,
@@ -348,7 +343,7 @@ describe('RelayReferenceMarker', () => {
       source,
       {
         dataID: ROOT_ID,
-        node: UserProfile.query,
+        node: UserProfile.operation,
         variables: {id: '1', orderby: ['last name']},
       },
       references,
@@ -358,5 +353,396 @@ describe('RelayReferenceMarker', () => {
       'client:bestFriendsByLastName',
       'client:root',
     ]);
+  });
+
+  describe('when using a @match field', () => {
+    let BarQuery;
+    let loader;
+
+    beforeEach(() => {
+      const nodes = generateAndCompile(
+        `
+          fragment PlainUserNameRenderer_name on PlainUserNameRenderer {
+            plaintext
+            data {
+              text
+            }
+          }
+
+          fragment MarkdownUserNameRenderer_name on MarkdownUserNameRenderer {
+            markdown
+            data {
+              markup
+            }
+          }
+
+          fragment BarFragment on User {
+            id
+            nameRenderer @match(onTypes: [
+              {
+                fragment: "PlainUserNameRenderer_name"
+                module: "PlainUserNameRenderer.react"
+              }
+              {
+                fragment: "MarkdownUserNameRenderer_name"
+                module: "MarkdownUserNameRenderer.react"
+              }
+            ], experimental_skipInlineDoNotUse: true)
+          }
+
+          query BarQuery($id: ID!) {
+            node(id: $id) {
+              ...BarFragment
+            }
+          }`,
+      );
+      BarQuery = nodes.BarQuery;
+      loader = {
+        get: moduleName => nodes[moduleName],
+        load: moduleName => Promise.resolve(nodes[moduleName]),
+      };
+    });
+
+    it('marks references when the match field/record exist and match a supported type (plaintext)', () => {
+      // When the type matches PlainUserNameRenderer
+      const storeData = {
+        '1': {
+          __id: '1',
+          id: '1',
+          __typename: 'User',
+          'nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])': {
+            __ref:
+              'client:1:nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])',
+          },
+        },
+        'client:1:nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])': {
+          __id:
+            'client:1:nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])',
+          __typename: 'PlainUserNameRenderer',
+          plaintext: 'plain name',
+          data: {__ref: 'data'},
+        },
+        'client:root': {
+          __id: 'client:root',
+          __typename: '__Root',
+          'node(id:"1")': {__ref: '1'},
+        },
+        data: {
+          __id: 'data',
+          __typename: 'PlainUserNameData',
+          text: 'text',
+        },
+      };
+      source = new RelayInMemoryRecordSource(storeData);
+      const references = new Set();
+      mark(
+        source,
+        {
+          dataID: 'client:root',
+          node: BarQuery.operation,
+          variables: {id: '1'},
+        },
+        references,
+        loader,
+      );
+      expect(Array.from(references).sort()).toEqual([
+        '1',
+        'client:1:nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])',
+        'client:root',
+        'data',
+      ]);
+    });
+
+    it('marks references when the match field/record exist and match a supported type (2)', () => {
+      // When the type matches MarkdownUserNameRenderer
+      const storeData = {
+        '1': {
+          __id: '1',
+          id: '1',
+          __typename: 'User',
+          'nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])': {
+            __ref:
+              'client:1:nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])',
+          },
+        },
+        'client:1:nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])': {
+          __id:
+            'client:1:nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])',
+          __typename: 'MarkdownUserNameRenderer',
+          markdown: 'markdown payload',
+          data: {__ref: 'data'},
+        },
+        'client:root': {
+          __id: 'client:root',
+          __typename: '__Root',
+          'node(id:"1")': {__ref: '1'},
+        },
+        data: {
+          __id: 'data',
+          __typename: 'MarkdownUserNameData',
+          markup: '<markup/>',
+        },
+      };
+      source = new RelayInMemoryRecordSource(storeData);
+      const references = new Set();
+      mark(
+        source,
+        {
+          dataID: 'client:root',
+          node: BarQuery.operation,
+          variables: {id: '1'},
+        },
+        references,
+        loader,
+      );
+      expect(Array.from(references).sort()).toEqual([
+        '1',
+        'client:1:nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])',
+        'client:root',
+        'data',
+      ]);
+    });
+
+    it('marks references when the match field/record exist but the matched fragment has not been processed', () => {
+      // The field returned the MarkdownUserNameRenderer type, but the module for that branch
+      // has not been loaded. The assumption is that the data cannot have been processed in that
+      // case and therefore the markdown field is missing in the store.
+      const storeData = {
+        '1': {
+          __id: '1',
+          id: '1',
+          __typename: 'User',
+          'nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])': {
+            __ref:
+              'client:1:nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])',
+          },
+        },
+        'client:1:nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])': {
+          __id:
+            'client:1:nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])',
+          __typename: 'MarkdownUserNameRenderer',
+          // NOTE: markdown/data fields are missing, data not processed.
+        },
+        'client:root': {
+          __id: 'client:root',
+          __typename: '__Root',
+          'node(id:"1")': {__ref: '1'},
+        },
+      };
+      source = new RelayInMemoryRecordSource(storeData);
+      const references = new Set();
+      mark(
+        source,
+        {
+          dataID: 'client:root',
+          node: BarQuery.operation,
+          variables: {id: '1'},
+        },
+        references,
+        // Return null to indicate the fragment is not loaded yet
+        {
+          get: _ => null,
+          load: _ => Promise.resolve(null),
+        },
+      );
+      expect(Array.from(references).sort()).toEqual([
+        '1',
+        'client:1:nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])',
+        'client:root',
+      ]);
+    });
+
+    it('marks references when the match field/record exist but a scalar field is missing', () => {
+      // the `data` field for the MarkdownUserNameRenderer is missing
+      const storeData = {
+        '1': {
+          __id: '1',
+          id: '1',
+          __typename: 'User',
+          'nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])': {
+            __ref:
+              'client:1:nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])',
+          },
+        },
+        'client:1:nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])': {
+          __id:
+            'client:1:nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])',
+          __typename: 'MarkdownUserNameRenderer',
+          // NOTE: 'markdown' field missing
+          data: {__ref: 'data'},
+        },
+        'client:root': {
+          __id: 'client:root',
+          __typename: '__Root',
+          'node(id:"1")': {__ref: '1'},
+        },
+        data: {
+          __id: 'data',
+          __typename: 'MarkdownUserNameData',
+          markup: '<markup/>',
+        },
+      };
+      source = new RelayInMemoryRecordSource(storeData);
+      const references = new Set();
+      mark(
+        source,
+        {
+          dataID: 'client:root',
+          node: BarQuery.operation,
+          variables: {id: '1'},
+        },
+        references,
+        loader,
+      );
+      expect(Array.from(references).sort()).toEqual([
+        '1',
+        'client:1:nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])',
+        'client:root',
+        'data',
+      ]);
+    });
+
+    it('marks references when the match field/record exist but a linked field is missing', () => {
+      // the `data` field for the MarkdownUserNameRenderer is missing
+      const storeData = {
+        '1': {
+          __id: '1',
+          id: '1',
+          __typename: 'User',
+          'nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])': {
+            __ref:
+              'client:1:nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])',
+          },
+        },
+        'client:1:nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])': {
+          __id:
+            'client:1:nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])',
+          __typename: 'MarkdownUserNameRenderer',
+          markdown: 'markdown text',
+          // NOTE: 'data' field missing
+        },
+        'client:root': {
+          __id: 'client:root',
+          __typename: '__Root',
+          'node(id:"1")': {__ref: '1'},
+        },
+      };
+      source = new RelayInMemoryRecordSource(storeData);
+      const references = new Set();
+      mark(
+        source,
+        {
+          dataID: 'client:root',
+          node: BarQuery.operation,
+          variables: {id: '1'},
+        },
+        references,
+        loader,
+      );
+      expect(Array.from(references).sort()).toEqual([
+        '1',
+        'client:1:nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])',
+        'client:root',
+      ]);
+    });
+
+    it('marks references when the match field/record exist but do not match a supported type', () => {
+      const storeData = {
+        '1': {
+          __id: '1',
+          id: '1',
+          __typename: 'User',
+          'nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])': {
+            __ref:
+              'client:1:nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])',
+          },
+        },
+        'client:1:nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])': {
+          __id:
+            'client:1:nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])',
+          __typename: 'CustomNameRenderer',
+          customField: 'custom value',
+        },
+        'client:root': {
+          __id: 'client:root',
+          __typename: '__Root',
+          'node(id:"1")': {__ref: '1'},
+        },
+      };
+      source = new RelayInMemoryRecordSource(storeData);
+      const references = new Set();
+      mark(
+        source,
+        {
+          dataID: 'client:root',
+          node: BarQuery.operation,
+          variables: {id: '1'},
+        },
+        references,
+        loader,
+      );
+      expect(Array.from(references).sort()).toEqual([
+        '1',
+        'client:1:nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])',
+        'client:root',
+      ]);
+    });
+
+    it('marks references when the match field is non-existent (null)', () => {
+      const storeData = {
+        '1': {
+          __id: '1',
+          id: '1',
+          __typename: 'User',
+          'nameRenderer(supported:["PlainUserNameRenderer","MarkdownUserNameRenderer"])': null,
+        },
+        'client:root': {
+          __id: 'client:root',
+          __typename: '__Root',
+          'node(id:"1")': {__ref: '1'},
+        },
+      };
+      source = new RelayInMemoryRecordSource(storeData);
+      const references = new Set();
+      mark(
+        source,
+        {
+          dataID: 'client:root',
+          node: BarQuery.operation,
+          variables: {id: '1'},
+        },
+        references,
+        loader,
+      );
+      expect(Array.from(references).sort()).toEqual(['1', 'client:root']);
+    });
+
+    it('marks references when the match field is not fetched (undefined)', () => {
+      const storeData = {
+        '1': {
+          __id: '1',
+          id: '1',
+          __typename: 'User',
+        },
+        'client:root': {
+          __id: 'client:root',
+          __typename: '__Root',
+          'node(id:"1")': {__ref: '1'},
+        },
+      };
+      source = new RelayInMemoryRecordSource(storeData);
+      const references = new Set();
+      mark(
+        source,
+        {
+          dataID: 'client:root',
+          node: BarQuery.operation,
+          variables: {id: '1'},
+        },
+        references,
+        loader,
+      );
+      expect(Array.from(references).sort()).toEqual(['1', 'client:root']);
+    });
   });
 });

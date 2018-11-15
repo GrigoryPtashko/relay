@@ -1,29 +1,25 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayFragmentPointer
  * @flow
  * @format
  */
 
 'use strict';
 
-const RelayQuery = require('RelayQuery');
-const RelayRecord = require('RelayRecord');
+const RelayQuery = require('./RelayQuery');
+const RelayRecord = require('../store/RelayRecord');
 
 const areEqual = require('areEqual');
-const forEachRootCallArg = require('forEachRootCallArg');
+const forEachRootCallArg = require('./forEachRootCallArg');
 const invariant = require('invariant');
 
-import type {DataID} from 'RelayInternalTypes';
-import type {Record} from 'RelayRecord';
-import type RelayRecordStore from 'RelayRecordStore';
-import type {Variables} from 'RelayTypes';
+import type {Record} from '../store/RelayRecord';
+import type RelayRecordStore from '../store/RelayRecordStore';
+import type {DataID, Variables} from 'relay-runtime';
 
 type FragmentVariablesMap = {
   [fragmentID: string]: Array<Variables>,

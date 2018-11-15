@@ -1,13 +1,10 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayIRTransforms
- * @flow
+ * @flow strict-local
  * @format
  */
 
@@ -18,6 +15,8 @@ const RelayConnectionTransform = require('../handlers/connection//RelayConnectio
 const RelayFieldHandleTransform = require('../transforms/RelayFieldHandleTransform');
 const RelayGenerateIDFieldTransform = require('../transforms/RelayGenerateIDFieldTransform');
 const RelayGenerateTypeNameTransform = require('../transforms/RelayGenerateTypeNameTransform');
+const RelayMaskTransform = require('../transforms/RelayMaskTransform');
+const RelayMatchTransform = require('../transforms/RelayMatchTransform');
 const RelayRelayDirectiveTransform = require('../transforms/RelayRelayDirectiveTransform');
 const RelaySkipHandleFieldTransform = require('../transforms/RelaySkipHandleFieldTransform');
 const RelayViewerHandleTransform = require('../handlers/viewer/RelayViewerHandleTransform');
@@ -25,65 +24,68 @@ const RelayViewerHandleTransform = require('../handlers/viewer/RelayViewerHandle
 const {
   FilterDirectivesTransform,
   FlattenTransform,
-  IRTransforms,
+  InlineFragmentsTransform,
+  SkipClientFieldTransform,
   SkipRedundantNodesTransform,
-} = require('../graphql-compiler/GraphQLCompilerPublic');
+  SkipUnreachableNodeTransform,
+  StripUnusedVariablesTransform,
+} = require('graphql-compiler');
 
-import type {
-  CompilerContext,
-  IRTransform,
-} from '../graphql-compiler/GraphQLCompilerPublic';
-
-const {fragmentTransforms, queryTransforms} = IRTransforms;
+import type {IRTransform} from 'graphql-compiler';
 
 // Transforms applied to the code used to process a query response.
 const relaySchemaExtensions: Array<string> = [
   RelayConnectionTransform.SCHEMA_EXTENSION,
+  RelayMatchTransform.SCHEMA_EXTENSION,
   RelayRelayDirectiveTransform.SCHEMA_EXTENSION,
+];
+
+// Transforms applied to both operations and fragments for both reading and
+// writing from the store.
+const relayCommonTransforms: Array<IRTransform> = [
+  RelayConnectionTransform.transform,
+  RelayViewerHandleTransform.transform,
+  RelayRelayDirectiveTransform.transform,
+  RelayMaskTransform.transform,
+  RelayMatchTransform.transform,
 ];
 
 // Transforms applied to fragments used for reading data from a store
 const relayFragmentTransforms: Array<IRTransform> = [
-  (ctx: CompilerContext) => RelayConnectionTransform.transform(ctx),
-  RelayViewerHandleTransform.transform,
-  RelayRelayDirectiveTransform.transform,
   RelayFieldHandleTransform.transform,
-  ...fragmentTransforms,
+  FlattenTransform.transformWithOptions({flattenAbstractTypes: true}),
+  SkipRedundantNodesTransform.transform,
 ];
 
 // Transforms applied to queries/mutations/subscriptions that are used for
 // fetching data from the server and parsing those responses.
 const relayQueryTransforms: Array<IRTransform> = [
-  (ctx: CompilerContext) => RelayConnectionTransform.transform(ctx),
-  RelayViewerHandleTransform.transform,
   RelayApplyFragmentArgumentTransform.transform,
-  ...queryTransforms,
-  RelayRelayDirectiveTransform.transform,
+  SkipClientFieldTransform.transform,
+  SkipUnreachableNodeTransform.transform,
   RelayGenerateIDFieldTransform.transform,
 ];
 
 // Transforms applied to the code used to process a query response.
 const relayCodegenTransforms: Array<IRTransform> = [
-  (ctx: CompilerContext) =>
-    FlattenTransform.transform(ctx, {
-      flattenAbstractTypes: true,
-      flattenFragmentSpreads: true,
-    }),
+  InlineFragmentsTransform.transform,
+  FlattenTransform.transformWithOptions({flattenAbstractTypes: true}),
   SkipRedundantNodesTransform.transform,
-  // Must be put after `SkipRedundantNodesTransform` which could shuffle the order.
   RelayGenerateTypeNameTransform.transform,
   FilterDirectivesTransform.transform,
 ];
 
 // Transforms applied before printing the query sent to the server.
 const relayPrintTransforms: Array<IRTransform> = [
-  (ctx: CompilerContext) => FlattenTransform.transform(ctx, {}),
+  FlattenTransform.transformWithOptions({}),
   RelayGenerateTypeNameTransform.transform,
   RelaySkipHandleFieldTransform.transform,
   FilterDirectivesTransform.transform,
+  StripUnusedVariablesTransform.transform,
 ];
 
 module.exports = {
+  commonTransforms: relayCommonTransforms,
   codegenTransforms: relayCodegenTransforms,
   fragmentTransforms: relayFragmentTransforms,
   printTransforms: relayPrintTransforms,

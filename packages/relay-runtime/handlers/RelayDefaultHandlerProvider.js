@@ -1,24 +1,21 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayDefaultHandlerProvider
- * @flow
+ * @flow strict-local
  * @format
  */
 
 'use strict';
 
-const RelayConnectionHandler = require('RelayConnectionHandler');
-const RelayViewerHandler = require('RelayViewerHandler');
+const RelayConnectionHandler = require('./connection/RelayConnectionHandler');
+const RelayViewerHandler = require('./viewer/RelayViewerHandler');
 
 const invariant = require('invariant');
 
-import type {Handler} from 'RelayStoreTypes';
+import type {Handler} from '../store/RelayStoreTypes';
 export type HandlerProvider = (name: string) => ?Handler;
 
 function RelayDefaultHandlerProvider(handle: string): Handler {

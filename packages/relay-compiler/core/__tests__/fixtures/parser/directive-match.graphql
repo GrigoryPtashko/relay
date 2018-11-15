@@ -1,0 +1,15 @@
+fragment TestFragment on Comment {
+  commentBody
+    @match(
+      onTypes: [
+        {
+          fragment: "MarkdownBody_comment"
+          module: "MarkdownBodyComponent.react"
+        }
+        {
+          fragment: "PlaintextBody_comment"
+          module: "PlaintextComponent.react"
+        }
+      ]
+    )
+}

@@ -1,35 +1,32 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayMutation
  * @flow
  * @format
  */
 
 'use strict';
 
-const RelayFragmentPointer = require('RelayFragmentPointer');
-const RelayFragmentReference = require('RelayFragmentReference');
-const RelayMetaRoute = require('RelayMetaRoute');
-const RelayQuery = require('RelayQuery');
-const RelayRecord = require('RelayRecord');
+const RelayFragmentPointer = require('../query/RelayFragmentPointer');
+const RelayFragmentReference = require('../query/RelayFragmentReference');
+const RelayMetaRoute = require('../route/RelayMetaRoute');
+const RelayQuery = require('../query/RelayQuery');
+const RelayRecord = require('../store/RelayRecord');
 
-const buildRQL = require('buildRQL');
+const buildRQL = require('../query/buildRQL');
 const forEachObject = require('forEachObject');
 const invariant = require('invariant');
-const validateMutationConfig = require('validateMutationConfig');
+const validateMutationConfig = require('./validateMutationConfig');
 const warning = require('warning');
 
-import type {ConcreteFragment} from 'ConcreteQuery';
-import type {RelayEnvironmentInterface} from 'RelayEnvironment';
-import type {RelayConcreteNode} from 'RelayQL';
-import type {RelayMutationConfig, Variables} from 'RelayTypes';
-import type {RelayQLFragmentBuilder} from 'buildRQL';
+import type {ConcreteFragment} from '../query/ConcreteQuery';
+import type {RelayConcreteNode} from '../query/RelayQL';
+import type {RelayQLFragmentBuilder} from '../query/buildRQL';
+import type {RelayEnvironmentInterface} from '../store/RelayEnvironment';
+import type {DeclarativeMutationConfig, Variables} from 'relay-runtime';
 
 export type FileMap = {[key: string]: File};
 export type RelayMutationFragments<Tk> = {
@@ -129,7 +126,7 @@ class RelayMutation<Tp: Object> {
    *
    * -  FIELDS_CHANGE provides configuration for mutation fields.
    *    {
-   *      type: RelayMutationType.FIELDS_CHANGE;
+   *      type: MutationTypes.FIELDS_CHANGE;
    *      fieldIDs: {[fieldName: string]: DataID | Array<DataID>};
    *    }
    *    where fieldIDs map `fieldName`s from the fatQuery to a DataID or
@@ -137,25 +134,25 @@ class RelayMutation<Tp: Object> {
    *
    * -  RANGE_ADD provides configuration for adding a new edge to a range.
    *    {
-   *      type: RelayMutationType.RANGE_ADD;
+   *      type: MutationTypes.RANGE_ADD;
    *      parentName: string;
    *      parentID: string;
    *      connectionName: string;
    *      edgeName: string;
    *      rangeBehaviors:
-   *        {[call: string]: GraphQLMutatorConstants.RANGE_OPERATIONS};
+   *        {[call: string]: RelayClassic.RangeOperation};
    *    }
    *    where `parentName` is the field in the fatQuery that contains the range,
    *    `parentID` is the DataID of `parentName` in the store, `connectionName`
    *    is the name of the range, `edgeName` is the name of the key in server
    *    response that contains the newly created edge, `rangeBehaviors` maps
    *    stringified representation of calls on the connection to
-   *    GraphQLMutatorConstants.RANGE_OPERATIONS.
+   *    RelayClassic.RangeOperation.
    *
    * -  NODE_DELETE provides configuration for deleting a node and the
    *    corresponding edge from a range.
    *    {
-   *      type: RelayMutationType.NODE_DELETE;
+   *      type: MutationTypes.NODE_DELETE;
    *      parentName: string;
    *      parentID: string;
    *      connectionName: string;
@@ -168,7 +165,7 @@ class RelayMutation<Tp: Object> {
    * -  RANGE_DELETE provides configuration for deleting an edge from a range
    *    but doesn't delete the node.
    *    {
-   *      type: RelayMutationType.RANGE_DELETE;
+   *      type: MutationTypes.RANGE_DELETE;
    *      parentName: string;
    *      parentID: string;
    *      connectionName: string;
@@ -190,11 +187,11 @@ class RelayMutation<Tp: Object> {
    *    attempt to fetch because it has not previously fetched anything for that
    *    object).
    *    {
-   *      type: RelayMutationType.REQUIRED_CHILDREN;
+   *      type: MutationTypes.REQUIRED_CHILDREN;
    *      children: Array<RelayQuery.Node>;
    *    }
    */
-  getConfigs(): Array<RelayMutationConfig> {
+  getConfigs(): Array<DeclarativeMutationConfig> {
     invariant(
       false,
       '%s: Expected abstract method `getConfigs` to be implemented.',
@@ -242,7 +239,7 @@ class RelayMutation<Tp: Object> {
    * will be inferred from the optimistic response. Most subclasses shouldn't
    * need to extend this method.
    */
-  getOptimisticConfigs(): ?Array<RelayMutationConfig> {
+  getOptimisticConfigs(): ?Array<DeclarativeMutationConfig> {
     return null;
   }
 
@@ -406,7 +403,9 @@ class RelayMutation<Tp: Object> {
           'fragments names: %s',
         this.name,
         fragmentName,
-        Object.keys(fragments).map(name => '`' + name + '`').join(', '),
+        Object.keys(fragments)
+          .map(name => '`' + name + '`')
+          .join(', '),
       );
     }
 

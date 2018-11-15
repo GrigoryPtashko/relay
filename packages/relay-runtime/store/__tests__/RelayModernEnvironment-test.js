@@ -1,26 +1,25 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @format
+ * @flow
  * @emails oncall+relay
  */
 
 'use strict';
 
-const RelayInMemoryRecordSource = require('RelayInMemoryRecordSource');
-const RelayMarkSweepStore = require('RelayMarkSweepStore');
-const RelayModernEnvironment = require('RelayModernEnvironment');
+const RelayInMemoryRecordSource = require('../RelayInMemoryRecordSource');
+const RelayModernEnvironment = require('../RelayModernEnvironment');
+const RelayModernStore = require('../RelayModernStore');
 const RelayModernTestUtils = require('RelayModernTestUtils');
-const RelayNetwork = require('RelayNetwork');
-const RelayObservable = require('RelayObservable');
+const RelayNetwork = require('../../network/RelayNetwork');
+const RelayObservable = require('../../network/RelayObservable');
 
-const {createOperationSelector} = require('RelayModernOperationSelector');
-const {ROOT_ID} = require('RelayStoreUtils');
+const {createOperationSelector} = require('../RelayModernOperationSelector');
+const {ROOT_ID} = require('../RelayStoreUtils');
 
 describe('RelayModernEnvironment', () => {
   const {generateAndCompile} = RelayModernTestUtils;
@@ -32,7 +31,7 @@ describe('RelayModernEnvironment', () => {
     jest.resetModules();
     expect.extend(RelayModernTestUtils.matchers);
     source = new RelayInMemoryRecordSource();
-    store = new RelayMarkSweepStore(source);
+    store = new RelayModernStore(source);
 
     config = {
       network: RelayNetwork.create(jest.fn()),
@@ -55,7 +54,7 @@ describe('RelayModernEnvironment', () => {
     beforeEach(() => {
       ({ParentQuery} = generateAndCompile(
         `
-        query ParentQuery($size: Int!) {
+        query ParentQuery($size: [Int]!) {
           me {
             id
             name
@@ -149,6 +148,9 @@ describe('RelayModernEnvironment', () => {
       environment.applyUpdate({
         storeUpdater: proxyStore => {
           const user = proxyStore.get(id);
+          if (!user) {
+            throw new Error('Expected user to be in the store');
+          }
           user.setValue(name, 'name');
         },
       });
@@ -400,8 +402,8 @@ describe('RelayModernEnvironment', () => {
       `,
       ));
       operationSelector = createOperationSelector(ActorQuery, {});
-      store.notify = jest.fn(store.notify.bind(store));
-      store.publish = jest.fn(store.publish.bind(store));
+      (store: $FlowFixMe).notify = jest.fn(store.notify.bind(store));
+      (store: $FlowFixMe).publish = jest.fn(store.publish.bind(store));
       environment = new RelayModernEnvironment(config);
     });
 
@@ -435,6 +437,9 @@ describe('RelayModernEnvironment', () => {
           const zuck = proxyStore.get('4');
           if (zuck) {
             const name = zuck.getValue('name');
+            if (typeof name !== 'string') {
+              throw new Error('Expected zuck.name to be defined');
+            }
             zuck.setValue(name.toUpperCase(), 'name');
           }
         },
@@ -498,7 +503,7 @@ describe('RelayModernEnvironment', () => {
           }),
       );
       environment = new RelayModernEnvironment({
-        network: RelayNetwork.create(fetch),
+        network: RelayNetwork.create((fetch: $FlowFixMe)),
         store,
       });
     });
@@ -567,16 +572,13 @@ describe('RelayModernEnvironment', () => {
             name: 'Joe',
           },
         },
+        errors: undefined,
       };
       deferred.resolve(payload);
       jest.runAllTimers();
 
       expect(next.mock.calls.length).toBe(1);
-      expect(next).toBeCalledWith({
-        errors: undefined,
-        fieldPayloads: [],
-        source: jasmine.any(Object),
-      });
+      expect(next).toBeCalledWith(payload);
       expect(complete).toBeCalled();
       expect(error).not.toBeCalled();
       expect(callback.mock.calls.length).toBe(1);
@@ -623,14 +625,13 @@ describe('RelayModernEnvironment', () => {
       error = jest.fn();
       next = jest.fn();
       callbacks = {complete, error, next};
-      fetch = jest.fn(
-        (_query, _variables, _cacheConfig) =>
-          new RelayObservable(sink => {
-            subject = sink;
-          }),
+      fetch = jest.fn((_query, _variables, _cacheConfig) =>
+        RelayObservable.create(sink => {
+          subject = sink;
+        }),
       );
       environment = new RelayModernEnvironment({
-        network: RelayNetwork.create(fetch),
+        network: RelayNetwork.create((fetch: $FlowFixMe)),
         store,
       });
     });
@@ -718,16 +719,13 @@ describe('RelayModernEnvironment', () => {
             name: 'Joe',
           },
         },
+        errors: undefined,
       };
       subject.next(payload);
       jest.runAllTimers();
 
       expect(next.mock.calls.length).toBe(1);
-      expect(next).toBeCalledWith({
-        errors: undefined,
-        fieldPayloads: [],
-        source: jasmine.any(Object),
-      });
+      expect(next).toBeCalledWith(payload);
       expect(complete).not.toBeCalled();
       expect(error).not.toBeCalled();
       expect(callback.mock.calls.length).toBe(1);
@@ -736,6 +734,191 @@ describe('RelayModernEnvironment', () => {
           name: 'Joe',
         },
       });
+    });
+  });
+
+  describe('execute() with network that returns optimistic response', () => {
+    let callbacks;
+    let environment;
+    let fetch;
+    let complete;
+    let error;
+    let next;
+    let operation;
+    let query;
+    let variables;
+    let dataSource;
+
+    beforeEach(() => {
+      ({ActorQuery: query} = generateAndCompile(
+        `
+        query ActorQuery($fetchSize: Boolean!) {
+          me {
+            name
+            profilePicture(size: 42) @include(if: $fetchSize) {
+              uri
+            }
+          }
+        }
+      `,
+      ));
+      variables = {fetchSize: false};
+      operation = createOperationSelector(query, {
+        ...variables,
+        foo: 'bar', // should be filtered from network fetch
+      });
+
+      complete = jest.fn();
+      error = jest.fn();
+      next = jest.fn();
+      callbacks = {complete, error, next};
+      fetch = (_query, _variables, _cacheConfig) => {
+        return RelayObservable.create(sink => {
+          dataSource = sink;
+        });
+      };
+      environment = new RelayModernEnvironment({
+        network: RelayNetwork.create(fetch),
+        store,
+      });
+    });
+
+    it('calls next() and publishes optimistic payload to the store', () => {
+      const selector = {
+        dataID: ROOT_ID,
+        node: query.fragment,
+        variables,
+      };
+      const snapshot = environment.lookup(selector);
+      const callback = jest.fn();
+      environment.subscribe(snapshot, callback);
+
+      environment.execute({operation}).subscribe(callbacks);
+      const payload = {
+        data: {
+          me: {
+            id: '842472',
+            __typename: 'User',
+            name: 'Joe',
+          },
+        },
+      };
+      dataSource.next({
+        ...payload,
+        extensions: {
+          isOptimistic: true,
+        },
+      });
+      jest.runAllTimers();
+
+      expect(next.mock.calls.length).toBe(1);
+      expect(complete).not.toBeCalled();
+      expect(error).not.toBeCalled();
+      expect(callback.mock.calls.length).toBe(1);
+      expect(callback.mock.calls[0][0].data).toEqual({
+        me: {
+          name: 'Joe',
+        },
+      });
+    });
+
+    it('reverts the optimistic payload before applying regular response', () => {
+      const selector = {
+        dataID: ROOT_ID,
+        node: query.fragment,
+        variables,
+      };
+      const snapshot = environment.lookup(selector);
+      const callback = jest.fn();
+      environment.subscribe(snapshot, callback);
+
+      environment.execute({operation}).subscribe(callbacks);
+      const optimisticResponse = {
+        data: {
+          me: {
+            id: '842472',
+            __typename: 'User',
+            name: 'Joe',
+          },
+        },
+      };
+
+      const realResponse = {
+        data: {
+          me: {
+            id: '842472',
+            __typename: 'User',
+            name: 'Jiyue',
+          },
+        },
+      };
+
+      dataSource.next({
+        ...optimisticResponse,
+        extensions: {
+          isOptimistic: true,
+        },
+      });
+
+      jest.runAllTimers();
+      dataSource.next(realResponse);
+      jest.runAllTimers();
+
+      expect(next.mock.calls.length).toBe(2);
+      expect(complete).not.toBeCalled();
+      expect(error).not.toBeCalled();
+      expect(callback.mock.calls.length).toBe(2);
+      expect(callback.mock.calls[0][0].data).toEqual({
+        me: {
+          name: 'Joe',
+        },
+      });
+      expect(callback.mock.calls[1][0].data).toEqual({
+        me: {
+          name: 'Jiyue',
+        },
+      });
+    });
+
+    it('reverts optimistic response as a cleanup.', () => {
+      const selector = {
+        dataID: ROOT_ID,
+        node: query.fragment,
+        variables,
+      };
+      const snapshot = environment.lookup(selector);
+      const callback = jest.fn();
+      environment.subscribe(snapshot, callback);
+
+      environment.execute({operation}).subscribe(callbacks);
+      const payload = {
+        data: {
+          me: {
+            id: '842472',
+            __typename: 'User',
+            name: 'Joe',
+          },
+        },
+      };
+      dataSource.next({
+        ...payload,
+        extensions: {
+          isOptimistic: true,
+        },
+      });
+      jest.runAllTimers();
+      dataSource.complete();
+
+      expect(next.mock.calls.length).toBe(1);
+      expect(complete).toBeCalled();
+      expect(error).not.toBeCalled();
+      expect(callback.mock.calls.length).toBe(2);
+      expect(callback.mock.calls[0][0].data).toEqual({
+        me: {
+          name: 'Joe',
+        },
+      });
+      expect(callback.mock.calls[1][0].data).toEqual(undefined);
     });
   });
 
@@ -794,11 +977,10 @@ describe('RelayModernEnvironment', () => {
       };
       operation = createOperationSelector(CreateCommentMutation, variables);
 
-      fetch = jest.fn(
-        (_query, _variables, _cacheConfig) =>
-          new RelayObservable(sink => {
-            subject = sink;
-          }),
+      fetch = jest.fn((_query, _variables, _cacheConfig) =>
+        RelayObservable.create(sink => {
+          subject = sink;
+        }),
       );
       environment = new RelayModernEnvironment({
         network: RelayNetwork.create(fetch),
@@ -948,8 +1130,18 @@ describe('RelayModernEnvironment', () => {
           operation,
           updater: _store => {
             const comment = _store.get(commentID);
+            if (!comment) {
+              throw new Error('Expected comment to be in the store');
+            }
             const body = comment.getLinkedRecord('body');
-            body.setValue(body.getValue('text').toUpperCase(), 'text');
+            if (!body) {
+              throw new Error('Expected comment to have a body');
+            }
+            const bodyValue: string = (body.getValue('text'): $FlowFixMe);
+            if (bodyValue == null) {
+              throw new Error('Expected comment body to have text');
+            }
+            body.setValue(bodyValue.toUpperCase(), 'text');
           },
         })
         .subscribe(callbacks);

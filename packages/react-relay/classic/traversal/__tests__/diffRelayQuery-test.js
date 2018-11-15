@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails oncall+relay
  * @format
@@ -12,18 +10,20 @@
 
 'use strict';
 
-jest.enableAutomock();
+jest
+  .mock('../../legacy/store/GraphQLRange')
+  .mock('../../store/RelayQueryTracker');
 
 require('configureForRelayOSS');
 
-const GraphQLRange = require('GraphQLRange');
-const RelayClassic = require('RelayClassic');
-const RelayQuery = require('RelayQuery');
-const RelayQueryTracker = require('RelayQueryTracker');
-const RelayRecordWriter = require('RelayRecordWriter');
+const GraphQLRange = require('../../legacy/store/GraphQLRange');
+const RelayClassic = require('../../RelayPublic');
+const RelayQuery = require('../../query/RelayQuery');
+const RelayQueryTracker = require('../../store/RelayQueryTracker');
+const RelayRecordWriter = require('../../store/RelayRecordWriter');
 const RelayTestUtils = require('RelayTestUtils');
 
-const diffRelayQuery = require('diffRelayQuery');
+const diffRelayQuery = require('../diffRelayQuery');
 
 describe('diffRelayQuery', () => {
   let RelayRecordStore;
@@ -35,7 +35,7 @@ describe('diffRelayQuery', () => {
   beforeEach(() => {
     jest.resetModules();
 
-    RelayRecordStore = require('RelayRecordStore');
+    RelayRecordStore = require('../../store/RelayRecordStore');
 
     rootCallMap = {
       viewer: {'': 'client:1'},

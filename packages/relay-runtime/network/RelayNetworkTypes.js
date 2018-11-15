@@ -1,22 +1,22 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayNetworkTypes
- * @flow
+ * @flow strict-local
  * @format
  */
 
 'use strict';
 
-import type {CacheConfig, Disposable} from 'RelayCombinedEnvironmentTypes';
-import type {ConcreteBatch} from 'RelayConcreteNode';
-import type RelayObservable, {ObservableFromValue} from 'RelayObservable';
-import type {Variables} from 'RelayTypes';
+import type {RequestNode} from '../util/RelayConcreteNode';
+import type {
+  CacheConfig,
+  Disposable,
+  Variables,
+} from '../util/RelayRuntimeTypes';
+import type RelayObservable, {ObservableFromValue} from './RelayObservable';
 
 /**
  * An interface for fetching the data for one or more (possibly interdependent)
@@ -34,40 +34,50 @@ export type PayloadError = {
     line: number,
     column: number,
   }>,
+  severity?: 'CRITICAL' | 'ERROR' | 'WARNING', // Not officially part of the spec, but used at Facebook
 };
+
+export type PayloadExtensions = {[key: string]: mixed};
 
 /**
  * The shape of a GraphQL response as dictated by the
  * [spec](http://facebook.github.io/graphql/#sec-Response)
  */
-export type QueryPayload = {|
-  data?: ?PayloadData,
-  errors?: Array<PayloadError>,
-  rerunVariables?: Variables,
-|};
+export type GraphQLResponse =
+  | {
+      data: PayloadData,
+      errors?: Array<PayloadError>,
+      extensions?: PayloadExtensions,
+    }
+  | {
+      data?: ?PayloadData,
+      errors: Array<PayloadError>,
+      extensions?: PayloadExtensions,
+    };
 
 /**
  * A function that returns an Observable representing the response of executing
  * a GraphQL operation.
  */
 export type ExecuteFunction = (
-  operation: ConcreteBatch,
+  request: RequestNode,
   variables: Variables,
   cacheConfig: CacheConfig,
   uploadables?: ?UploadableMap,
-) => RelayObservable<QueryPayload>;
+) => RelayObservable<GraphQLResponse>;
 
 /**
  * A function that executes a GraphQL operation with request/response semantics.
  *
- * May return an Observable or Promise of a raw server response.
+ * May return an Observable or Promise of a plain GraphQL server response, or
+ * a composed ExecutePayload object supporting additional metadata.
  */
 export type FetchFunction = (
-  operation: ConcreteBatch,
+  request: RequestNode,
   variables: Variables,
   cacheConfig: CacheConfig,
   uploadables: ?UploadableMap,
-) => ObservableFromValue<QueryPayload>;
+) => ObservableFromValue<GraphQLResponse>;
 
 /**
  * A function that executes a GraphQL subscription operation, returning one or
@@ -77,19 +87,20 @@ export type FetchFunction = (
  * fourth parameter.
  */
 export type SubscribeFunction = (
-  operation: ConcreteBatch,
+  request: RequestNode,
   variables: Variables,
   cacheConfig: CacheConfig,
-  observer: LegacyObserver<QueryPayload>,
-) => RelayObservable<QueryPayload> | Disposable;
+  observer?: LegacyObserver<GraphQLResponse>,
+) => RelayObservable<GraphQLResponse> | Disposable;
 
+// $FlowFixMe(site=react_native_fb) this is compatible with classic api see D4658012
 export type Uploadable = File | Blob;
 // $FlowFixMe this is compatible with classic api see D4658012
 export type UploadableMap = {[key: string]: Uploadable};
 
 // Supports legacy SubscribeFunction definitions. Do not use in new code.
-export type LegacyObserver<T> = {
-  onCompleted?: ?() => void,
-  onError?: ?(error: Error) => void,
-  onNext?: ?(data: T) => void,
-};
+export type LegacyObserver<-T> = {|
+  +onCompleted?: ?() => void,
+  +onError?: ?(error: Error) => void,
+  +onNext?: ?(data: T) => void,
+|};

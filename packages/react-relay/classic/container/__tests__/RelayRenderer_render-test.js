@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails oncall+relay
  * @format
@@ -12,21 +10,20 @@
 
 'use strict';
 
-jest.enableAutomock();
+jest
+  .mock('../../query-config/RelayQueryConfig')
+  .mock('../../store/RelayEnvironment');
 
 require('configureForRelayOSS');
-
-jest.unmock('RelayRenderer');
-jest.unmock('react-test-renderer');
 
 const React = require('React');
 const ReactTestRenderer = require('react-test-renderer');
 const ReactTestUtils = require('ReactTestUtils');
-const RelayClassic = require('RelayClassic');
-const RelayEnvironment = require('RelayEnvironment');
-const RelayQueryConfig = require('RelayQueryConfig');
-const RelayRenderer = require('RelayRenderer');
-const RelayStaticContainer = require('RelayStaticContainer');
+const Relay = require('../../RelayPublic');
+const RelayEnvironment = require('../../store/RelayEnvironment');
+const RelayQueryConfig = require('../../query-config/RelayQueryConfig');
+const RelayRenderer = require('../RelayRenderer');
+const RelayStaticContainer = require('../RelayStaticContainer');
 
 describe('RelayRenderer.render', () => {
   let MockContainer;
@@ -54,7 +51,7 @@ describe('RelayRenderer.render', () => {
         return <div />;
       }
     }
-    MockContainer = RelayClassic.createContainer(MockComponent, {
+    MockContainer = Relay.createContainer(MockComponent, {
       fragments: {},
     });
 
@@ -196,42 +193,5 @@ describe('RelayRenderer.render', () => {
 
     request.succeed();
     expect(render.mock.calls.length).toBe(3);
-  });
-
-  describe('GC integration', () => {
-    let garbageCollector;
-
-    beforeEach(() => {
-      const storeData = environment.getStoreData();
-      storeData.initializeGarbageCollector(jest.fn());
-      garbageCollector = storeData.getGarbageCollector();
-    });
-
-    it('acquires a GC hold when mounted', () => {
-      garbageCollector.acquireHold = jest.fn();
-      renderElement(
-        <RelayRenderer
-          Container={MockContainer}
-          queryConfig={queryConfig}
-          environment={environment}
-        />,
-      );
-      expect(garbageCollector.acquireHold).toBeCalled();
-    });
-
-    it('releases its GC hold when unmounted', () => {
-      const release = jest.fn();
-      garbageCollector.acquireHold = jest.fn(() => ({release}));
-      renderElement(
-        <RelayRenderer
-          Container={MockContainer}
-          queryConfig={queryConfig}
-          environment={environment}
-        />,
-      );
-      expect(release).not.toBeCalled();
-      container.unmount();
-      expect(release).toBeCalled();
-    });
   });
 });

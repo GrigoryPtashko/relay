@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails oncall+relay
  * @format
@@ -13,7 +11,7 @@
 'use strict';
 
 const React = require('React');
-const RelayClassic = require('RelayClassic');
+const RelayPublic = require('../../RelayPublic');
 
 describe('isRelayContainer', function() {
   let MockComponent;
@@ -28,14 +26,14 @@ describe('isRelayContainer', function() {
       }
     };
 
-    MockContainer = RelayClassic.createContainer(MockComponent, {
+    MockContainer = RelayPublic.createContainer(MockComponent, {
       fragments: {},
     });
   });
 
   it('identifies RelayClassic containers correctly', () => {
-    expect(RelayClassic.isContainer(MockContainer)).toBe(true);
+    expect(RelayPublic.isContainer(MockContainer)).toBe(true);
 
-    expect(RelayClassic.isContainer(MockComponent)).toBe(false);
+    expect(RelayPublic.isContainer(MockComponent)).toBe(false);
   });
 });

@@ -1,28 +1,24 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule GraphQLRange
  * @format
  */
 
 'use strict';
 
-const GraphQLMutatorConstants = require('GraphQLMutatorConstants');
-const GraphQLSegment = require('GraphQLSegment');
-const RelayRecord = require('RelayRecord');
+const GraphQLSegment = require('./GraphQLSegment');
+const RelayRecord = require('../../store/RelayRecord');
 
 const forEachObject = require('forEachObject');
 const invariant = require('invariant');
-const rangeOperationToMetadataKey = require('rangeOperationToMetadataKey');
-const serializeRelayQueryCall = require('serializeRelayQueryCall');
+const rangeOperationToMetadataKey = require('../../mutation/rangeOperationToMetadataKey');
+const serializeRelayQueryCall = require('../../query/serializeRelayQueryCall');
 const warning = require('warning');
 
-const {ConnectionInterface} = require('RelayRuntime');
+const {ConnectionInterface, RangeOperations} = require('relay-runtime');
 
 /**
  * @param {array<object>} queryCalls
@@ -269,7 +265,7 @@ class GraphQLRange {
 
     if (!isValidRangeCall(calls)) {
       console.error(
-        'GraphQLRange currently only handles first(<count>), ' +
+        'GraphQLRange.addItems only handles first(<count>), ' +
           'after(<cursor>).first(<count>), last(<count>), ' +
           'before(<cursor>).last(<count>), before(<cursor>).first(<count>), ' +
           'and after(<cursor>).last(<count>)',
@@ -743,7 +739,7 @@ class GraphQLRange {
     // without comparing to undefined
     if (!isValidRangeCall(calls)) {
       console.error(
-        'GraphQLRange currently only handles first(<count>), ' +
+        'GraphQLRange.retrieveRangeInfoForQuery only handles first(<count>), ' +
           'after(<cursor>).first(<count>), last(<count>), ' +
           'before(<cursor>).last(<count>), before(<cursor>).first(<count>), ' +
           'and after(<cursor>).last(<count>)',
@@ -822,9 +818,7 @@ class GraphQLRange {
    * @return {?array<string>}
    */
   _getAppendedIDsForQueuedRecord(queuedRecord) {
-    return queuedRecord[
-      rangeOperationToMetadataKey[GraphQLMutatorConstants.APPEND]
-    ];
+    return queuedRecord[rangeOperationToMetadataKey[RangeOperations.APPEND]];
   }
 
   /**
@@ -832,9 +826,7 @@ class GraphQLRange {
    * @return {?array<string>}
    */
   _getRemovedIDsForQueuedRecord(queuedRecord) {
-    return queuedRecord[
-      rangeOperationToMetadataKey[GraphQLMutatorConstants.REMOVE]
-    ];
+    return queuedRecord[rangeOperationToMetadataKey[RangeOperations.REMOVE]];
   }
 
   /**
@@ -842,9 +834,7 @@ class GraphQLRange {
    * @return {?array<string>}
    */
   _getPrependedIDsForQueuedRecord(queuedRecord) {
-    return queuedRecord[
-      rangeOperationToMetadataKey[GraphQLMutatorConstants.PREPEND]
-    ];
+    return queuedRecord[rangeOperationToMetadataKey[RangeOperations.PREPEND]];
   }
 
   /**

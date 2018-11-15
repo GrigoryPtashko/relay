@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails oncall+relay
  * @format
@@ -16,21 +14,20 @@ require('configureForRelayOSS');
 
 jest.useFakeTimers();
 jest
-  .unmock('GraphQLRange')
-  .unmock('GraphQLSegment')
-  .unmock('RelayMutation')
-  .unmock('RelayNetworkLayer');
+  .unmock('../../legacy/store/GraphQLRange')
+  .unmock('../../legacy/store/GraphQLSegment')
+  .unmock('../RelayMutation')
+  .unmock('../../network/RelayNetworkLayer');
 
-const GraphQLMutatorConstants = require('GraphQLMutatorConstants');
-const RelayClassic = require('RelayClassic');
-const RelayEnvironment = require('RelayEnvironment');
-const RelayGraphQLMutation = require('RelayGraphQLMutation');
-const RelayMutationTransactionStatus = require('RelayMutationTransactionStatus');
+const Relay = require('../../RelayPublic');
+const RelayEnvironment = require('../../store/RelayEnvironment');
+const RelayGraphQLMutation = require('../RelayGraphQLMutation');
+const RelayMutationTransactionStatus = require('../RelayMutationTransactionStatus');
 const RelayTestUtils = require('RelayTestUtils');
-const generateRQLFieldAlias = require('generateRQLFieldAlias');
-const readRelayQueryData = require('readRelayQueryData');
+const generateRQLFieldAlias = require('../../query/generateRQLFieldAlias');
+const readRelayQueryData = require('../../store/readRelayQueryData');
 
-const {ConnectionInterface} = require('RelayRuntime');
+const {ConnectionInterface, RangeOperations} = require('relay-runtime');
 
 const {COMMITTING, COMMIT_QUEUED, UNCOMMITTED} = RelayMutationTransactionStatus;
 const {HAS_NEXT_PAGE, HAS_PREV_PAGE, PAGE_INFO} = ConnectionInterface.get();
@@ -76,7 +73,7 @@ describe('RelayGraphQLMutation', () => {
     });
     storeData.getNetworkLayer().injectImplementation({sendMutation});
 
-    feedbackLikeQuery = RelayClassic.QL`mutation FeedbackLikeMutation {
+    feedbackLikeQuery = Relay.QL`mutation FeedbackLikeMutation {
         feedbackLike(input: $input) {
           clientMutationId
           feedback {
@@ -100,7 +97,7 @@ describe('RelayGraphQLMutation', () => {
       likersCount: 10,
     };
 
-    optimisticQuery = RelayClassic.QL`mutation FeedbackLikeOptimisticUpdate {
+    optimisticQuery = Relay.QL`mutation FeedbackLikeOptimisticUpdate {
         feedbackLike(input: $input) {
           clientMutationId
           feedback {
@@ -144,7 +141,7 @@ describe('RelayGraphQLMutation', () => {
     it('optimistically updates the store', () => {
       writePayload(
         getNode(
-          RelayClassic.QL`
+          Relay.QL`
           query {
             node(id: "aFeedbackId") {
               ... on Feedback {
@@ -211,7 +208,7 @@ describe('RelayGraphQLMutation', () => {
 
       const data = readData(
         getNode(
-          RelayClassic.QL`
+          Relay.QL`
           fragment on Feedback {
             doesViewerLike
             id
@@ -285,7 +282,7 @@ describe('RelayGraphQLMutation', () => {
       it('can toggle a boolean', () => {
         writePayload(
           getNode(
-            RelayClassic.QL`
+            Relay.QL`
             query {
               node(id: "aFeedbackId") {
                 ... on Feedback {
@@ -408,7 +405,7 @@ describe('RelayGraphQLMutation', () => {
         //  Store is updated
         const data = readData(
           getNode(
-            RelayClassic.QL`
+            Relay.QL`
             fragment on Feedback {
               doesViewerLike
               id
@@ -463,7 +460,7 @@ describe('RelayGraphQLMutation', () => {
       it('can prepend to a range', () => {
         writePayload(
           getNode(
-            RelayClassic.QL`
+            Relay.QL`
             query {
               node(id: "aFeedbackId") {
                 ... on Feedback {
@@ -521,7 +518,7 @@ describe('RelayGraphQLMutation', () => {
           onFailure: jest.fn(),
           onSuccess: jest.fn(),
         };
-        const query = RelayClassic.QL`mutation CommentAddMutation {
+        const query = Relay.QL`mutation CommentAddMutation {
           commentCreate(input: $input) {
             clientMutationId
             feedbackCommentEdge {
@@ -565,8 +562,8 @@ describe('RelayGraphQLMutation', () => {
             parentID: 'aFeedbackId',
             parentName: 'feedback',
             rangeBehaviors: {
-              '': GraphQLMutatorConstants.PREPEND,
-              'if(true)': GraphQLMutatorConstants.PREPEND,
+              '': RangeOperations.PREPEND,
+              'if(true)': RangeOperations.PREPEND,
             },
           },
         ];
@@ -616,7 +613,7 @@ describe('RelayGraphQLMutation', () => {
         //  Store is updated
         const data = readData(
           getNode(
-            RelayClassic.QL`
+            Relay.QL`
             fragment on Feedback {
               id
               topLevelComments(first: 10) {

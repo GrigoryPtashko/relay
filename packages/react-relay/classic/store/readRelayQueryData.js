@@ -1,40 +1,35 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule readRelayQueryData
  * @flow
  * @format
  */
 
 'use strict';
 
-const RelayClassicRecordState = require('RelayClassicRecordState');
-const RelayFragmentPointer = require('RelayFragmentPointer');
-const RelayProfiler = require('RelayProfiler');
-const RelayQuery = require('RelayQuery');
-const RelayQueryVisitor = require('RelayQueryVisitor');
-const RelayRecord = require('RelayRecord');
-const RelayRecordStatusMap = require('RelayRecordStatusMap');
+const RelayClassicRecordState = require('./RelayClassicRecordState');
+const RelayFragmentPointer = require('../query/RelayFragmentPointer');
+const RelayQuery = require('../query/RelayQuery');
+const RelayQueryVisitor = require('../query/RelayQueryVisitor');
+const RelayRecord = require('./RelayRecord');
+const RelayRecordStatusMap = require('./RelayRecordStatusMap');
 
-const callsFromGraphQL = require('callsFromGraphQL');
-const callsToGraphQL = require('callsToGraphQL');
+const callsFromGraphQL = require('../query/callsFromGraphQL');
+const callsToGraphQL = require('../query/callsToGraphQL');
 const invariant = require('invariant');
-const isCompatibleRelayFragmentType = require('isCompatibleRelayFragmentType');
-const validateRelayReadQuery = require('validateRelayReadQuery');
+const isCompatibleRelayFragmentType = require('../tools/isCompatibleRelayFragmentType');
+const validateRelayReadQuery = require('./validateRelayReadQuery');
 
-const {ConnectionInterface} = require('RelayRuntime');
+const {ConnectionInterface, RelayProfiler} = require('relay-runtime');
 
-import type GraphQLStoreRangeUtils from 'GraphQLStoreRangeUtils';
-import type {DataID} from 'RelayInternalTypes';
-import type RelayRecordStore from 'RelayRecordStore';
-import type {RangeInfo} from 'RelayRecordStore';
-import type RelayStoreData from 'RelayStoreData';
-import type {StoreReaderData, StoreReaderOptions} from 'RelayTypes';
+import type {StoreReaderData, StoreReaderOptions} from '../tools/RelayTypes';
+import type RelayRecordStore from './RelayRecordStore';
+import type {RangeInfo} from './RelayRecordStore';
+import type RelayStoreData from './RelayStoreData';
+import type {DataID} from 'relay-runtime';
 
 const {MUTATION_STATUS} = RelayRecord.MetadataKey;
 
@@ -78,7 +73,7 @@ function readRelayQueryData(
 }
 
 class RelayStoreReader extends RelayQueryVisitor<State> {
-  _rangeData: GraphQLStoreRangeUtils;
+  _rangeData: any; // GraphQLStoreRangeUtils
   _recordStore: RelayRecordStore;
   _storeData: RelayStoreData;
   _traverseFragmentReferences: boolean;

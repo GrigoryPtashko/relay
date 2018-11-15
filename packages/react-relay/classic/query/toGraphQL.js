@@ -1,23 +1,20 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule toGraphQL
- * @flow
+ * @flow strict-local
  * @format
  */
 
 'use strict';
 
-const QueryBuilder = require('QueryBuilder');
-const RelayQuery = require('RelayQuery');
+const QueryBuilder = require('./QueryBuilder');
+const RelayQuery = require('./RelayQuery');
 
-const callsToGraphQL = require('callsToGraphQL');
-const generateConcreteFragmentID = require('generateConcreteFragmentID');
+const callsToGraphQL = require('./callsToGraphQL');
+const generateConcreteFragmentID = require('./generateConcreteFragmentID');
 const invariant = require('invariant');
 
 import type {
@@ -25,13 +22,13 @@ import type {
   ConcreteFragment,
   ConcreteQuery,
   ConcreteSelection,
-} from 'ConcreteQuery';
+} from './ConcreteQuery';
 
 /**
  * @internal
  *
  * Converts a RelayQuery.Node into a plain object representation. This is
- * equivalent to the AST produced by `babel-relay-plugin` and is intended for
+ * equivalent to the AST produced by `babel-plugin-relay` and is intended for
  * use in serializing RelayQuery nodes.
  *
  * NOTE: This is used by external open source projects.

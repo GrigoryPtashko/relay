@@ -1,22 +1,24 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayClassicCore
- * @flow
+ * @flow strict-local
  * @format
  */
 
 'use strict';
 
-const RelayFragmentSpecResolver = require('RelayFragmentSpecResolver');
+const RelayFragmentSpecResolver = require('./RelayFragmentSpecResolver');
 
-const {getClassicFragment, getClassicOperation} = require('RelayGraphQLTag');
-const {createOperationSelector} = require('RelayOperationSelector');
+const {
+  getClassicFragment,
+  getClassicOperation,
+  isClassicFragment,
+  isClassicOperation,
+} = require('../query/RelayGraphQLTag');
+const {createOperationSelector} = require('./RelayOperationSelector');
 const {
   areEqualSelectors,
   getDataIDsFromObject,
@@ -24,17 +26,20 @@ const {
   getSelectorList,
   getSelectorsFromObject,
   getVariablesFromObject,
-} = require('RelaySelector');
+} = require('./RelaySelector');
 
-import type {FragmentSpecResolver, Props} from 'RelayCombinedEnvironmentTypes';
-import type {FragmentMap, RelayContext} from 'RelayEnvironmentTypes';
+import type {
+  FragmentSpecResolver,
+  Props,
+} from './RelayCombinedEnvironmentTypes';
+import type {FragmentMap, RelayContext} from './RelayEnvironmentTypes';
 
 function createFragmentSpecResolver(
   context: RelayContext,
   containerName: string,
   fragments: FragmentMap,
   props: Props,
-  callback: () => void,
+  callback?: () => void,
 ): FragmentSpecResolver {
   return new RelayFragmentSpecResolver(context, fragments, props, callback);
 }
@@ -49,9 +54,11 @@ module.exports = {
   createOperationSelector,
   getDataIDsFromObject,
   getFragment: getClassicFragment,
-  getOperation: getClassicOperation,
+  getRequest: getClassicOperation,
   getSelector,
   getSelectorList,
   getSelectorsFromObject,
   getVariablesFromObject,
+  isFragment: isClassicFragment,
+  isRequest: isClassicOperation,
 };

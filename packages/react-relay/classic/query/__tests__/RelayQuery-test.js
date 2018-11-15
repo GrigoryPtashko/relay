@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails oncall+relay
  * @format
@@ -16,14 +14,14 @@ jest.mock('warning');
 
 require('configureForRelayOSS');
 
-const QueryBuilder = require('QueryBuilder');
-const RelayClassic = require('RelayClassic');
-const RelayFragmentReference = require('RelayFragmentReference');
-const RelayMetaRoute = require('RelayMetaRoute');
-const RelayQuery = require('RelayQuery');
+const QueryBuilder = require('../QueryBuilder');
+const RelayClassic = require('../../RelayPublic');
+const RelayFragmentReference = require('../RelayFragmentReference');
+const RelayMetaRoute = require('../../route/RelayMetaRoute');
+const RelayQuery = require('../RelayQuery');
 const RelayTestUtils = require('RelayTestUtils');
 
-const {getClassicFragment, graphql} = require('RelayGraphQLTag');
+const {getClassicFragment, graphql} = require('../RelayGraphQLTag');
 
 describe('RelayQuery', () => {
   const {getNode} = RelayTestUtils;
@@ -275,13 +273,17 @@ describe('RelayQuery', () => {
         const variablesA = {foo: 123};
         const variablesB = {foo: 456};
         expect(
-          RelayQuery.Fragment
-            .create(node, route, variablesA)
-            .getCompositeHash(),
+          RelayQuery.Fragment.create(
+            node,
+            route,
+            variablesA,
+          ).getCompositeHash(),
         ).not.toBe(
-          RelayQuery.Fragment
-            .create(node, route, variablesB)
-            .getCompositeHash(),
+          RelayQuery.Fragment.create(
+            node,
+            route,
+            variablesB,
+          ).getCompositeHash(),
         );
       });
 
@@ -291,13 +293,17 @@ describe('RelayQuery', () => {
         const routeB = RelayMetaRoute.get('routeB');
         const variables = {foo: 123};
         expect(
-          RelayQuery.Fragment
-            .create(node, routeA, variables)
-            .getCompositeHash(),
+          RelayQuery.Fragment.create(
+            node,
+            routeA,
+            variables,
+          ).getCompositeHash(),
         ).not.toBe(
-          RelayQuery.Fragment
-            .create(node, routeB, variables)
-            .getCompositeHash(),
+          RelayQuery.Fragment.create(
+            node,
+            routeB,
+            variables,
+          ).getCompositeHash(),
         );
       });
 
@@ -533,7 +539,7 @@ describe('RelayQuery', () => {
       expect(children[0].getSchemaName()).toBe('id');
 
       // the reference is expanded with overridden query variables
-      expect(children[1] instanceof RelayQuery.Fragment);
+      expect(children[1]).toBeInstanceOf(RelayQuery.Fragment);
       expect(children[1].getType()).toBe('User');
       const grandchildren = children[1].getChildren();
       expect(grandchildren.length).toBe(2);
@@ -584,7 +590,7 @@ describe('RelayQuery', () => {
       expect(children[0].getSchemaName()).toBe('id');
 
       // the reference is expanded with overridden query variables
-      expect(children[1] instanceof RelayQuery.Fragment);
+      expect(children[1]).toBeInstanceOf(RelayQuery.Fragment);
       expect(children[1].getType()).toBe('User');
       expect(children[1].getVariables()).toEqual({
         size: 'override',
@@ -601,7 +607,7 @@ describe('RelayQuery', () => {
 
     it('expands fragment spreads with literal variables', () => {
       const fragments = {
-        foo: graphql.experimental`
+        foo: graphql`
           fragment RelayQuery_foo on User
             @argumentDefinitions(
               size: {type: "Int"}
@@ -636,7 +642,7 @@ describe('RelayQuery', () => {
       expect(children[0].getSchemaName()).toBe('id');
 
       // the reference is expanded with overridden query variables
-      expect(children[1] instanceof RelayQuery.Fragment);
+      expect(children[1]).toBeInstanceOf(RelayQuery.Fragment);
       expect(children[1].getType()).toBe('User');
       expect(children[1].getVariables()).toEqual({
         size: 'override',
@@ -697,7 +703,7 @@ describe('RelayQuery', () => {
       expect(children.length).toBe(3);
       expect(children[0].getSchemaName()).toBe('id');
 
-      expect(children[1] instanceof RelayQuery.Fragment);
+      expect(children[1]).toBeInstanceOf(RelayQuery.Fragment);
       expect(children[1].getType()).toBe('User');
       let grandchildren = children[1].getChildren();
       expect(grandchildren.length).toBe(2);
@@ -707,7 +713,7 @@ describe('RelayQuery', () => {
         {name: 'size', type: '[Int]', value: 'override'},
       ]);
 
-      expect(children[2] instanceof RelayQuery.Fragment);
+      expect(children[2]).toBeInstanceOf(RelayQuery.Fragment);
       expect(children[2].getType()).toBe('User');
       grandchildren = children[2].getChildren();
       expect(grandchildren.length).toBe(2);

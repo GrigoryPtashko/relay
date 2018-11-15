@@ -1,35 +1,22 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @flow
- * @providesModule RelayViewerHandleTransform
+ * @flow strict-local
  * @format
  */
 
 'use strict';
 
-const {
-  IRTransformer,
-  SchemaUtils,
-} = require('../../graphql-compiler/GraphQLCompilerPublic');
-// TODO T21875029 ../../../relay-runtime/util/RelayDefaultHandleKey
-const {DEFAULT_HANDLE_KEY} = require('RelayDefaultHandleKey');
 const {GraphQLObjectType} = require('graphql');
+const {IRTransformer, SchemaUtils} = require('graphql-compiler');
+const {DEFAULT_HANDLE_KEY} = require('relay-runtime');
 
-import type {
-  CompilerContext,
-  LinkedField,
-} from '../../graphql-compiler/GraphQLCompilerPublic';
-import type {GraphQLSchema} from 'graphql';
+import type {CompilerContext, LinkedField, MatchField} from 'graphql-compiler';
 
 const {getRawType} = SchemaUtils;
-
-type State = {};
 
 const ID = 'id';
 const VIEWER_HANDLE = 'viewer';
@@ -38,11 +25,8 @@ const VIEWER_TYPE = 'Viewer';
 /**
  * A transform that adds a "viewer" handle to all fields whose type is `Viewer`.
  */
-function transform(
-  context: CompilerContext,
-  schema: GraphQLSchema,
-): CompilerContext {
-  const viewerType = schema.getType(VIEWER_TYPE);
+function relayViewerHandleTransform(context: CompilerContext): CompilerContext {
+  const viewerType = context.serverSchema.getType(VIEWER_TYPE);
   if (
     viewerType == null ||
     !(viewerType instanceof GraphQLObjectType) ||
@@ -50,17 +34,14 @@ function transform(
   ) {
     return context;
   }
-  return IRTransformer.transform(
-    context,
-    {
-      LinkedField: visitLinkedField,
-    },
-    () => ({}),
-  );
+  return IRTransformer.transform(context, {
+    LinkedField: visitLinkedOrMatchField,
+    MatchField: visitLinkedOrMatchField,
+  });
 }
 
-function visitLinkedField(field: LinkedField, state: State): ?LinkedField {
-  const transformedNode = this.traverse(field, state);
+function visitLinkedOrMatchField<T: LinkedField | MatchField>(field: T): ?T {
+  const transformedNode = this.traverse(field);
   if (getRawType(field.type).name !== VIEWER_TYPE) {
     return transformedNode;
   }
@@ -81,4 +62,6 @@ function visitLinkedField(field: LinkedField, state: State): ?LinkedField {
     : transformedNode;
 }
 
-module.exports = {transform};
+module.exports = {
+  transform: relayViewerHandleTransform,
+};

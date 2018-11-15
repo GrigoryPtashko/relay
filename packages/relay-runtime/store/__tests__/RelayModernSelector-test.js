@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @format
  * @emails oncall+relay
@@ -21,9 +19,9 @@ const {
   getSelectorList,
   getSelectorsFromObject,
   getVariablesFromObject,
-} = require('RelayModernSelector');
+} = require('../RelayModernSelector');
 const {createMockEnvironment} = require('RelayModernMockEnvironment');
-const {ROOT_ID} = require('RelayStoreUtils');
+const {ROOT_ID} = require('../RelayStoreUtils');
 const RelayModernTestUtils = require('RelayModernTestUtils');
 
 describe('RelayModernSelector', () => {
@@ -71,7 +69,7 @@ describe('RelayModernSelector', () => {
     };
     const root = {
       dataID,
-      node: UserQuery.query,
+      node: UserQuery.operation,
       variables,
     };
     const operationSelector = {

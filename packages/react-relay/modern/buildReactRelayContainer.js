@@ -1,32 +1,30 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule buildReactRelayContainer
  * @flow
  * @format
  */
 
 'use strict';
 
-const RelayPropTypes = require('RelayPropTypes');
+const React = require('React');
+const ReactRelayContext = require('../modern/ReactRelayContext');
 
-const assertFragmentMap = require('assertFragmentMap');
+const assertFragmentMap = require('./assertFragmentMap');
+const invariant = require('invariant');
 const mapObject = require('mapObject');
+const readContext = require('./readContext');
 
-const {getComponentName, getContainerName} = require('RelayContainerUtils');
+const {
+  getComponentName,
+  getContainerName,
+} = require('./ReactRelayContainerUtils');
 
-import type {GeneratedNodeMap} from 'ReactRelayTypes';
-import type {GraphQLTaggedNode} from 'RelayModernGraphQLTag';
-import type {FragmentMap} from 'RelayStoreTypes';
-
-const containerContextTypes = {
-  relay: RelayPropTypes.Relay,
-};
+import type {GeneratedNodeMap} from './ReactRelayTypes';
+import type {GraphQLTaggedNode, FragmentMap} from 'relay-runtime';
 
 type ContainerCreator = (
   Component: React$ComponentType<any>,
@@ -51,11 +49,11 @@ function buildReactRelayContainer<TBase: React$ComponentType<*>>(
   // Memoize a container for the last environment instance encountered
   let environment;
   let Container;
-  function ContainerConstructor(props, context) {
-    if (Container == null || context.relay.environment !== environment) {
-      environment = context.relay.environment;
+  function ContainerConstructor(props) {
+    if (Container == null || props.__relayContext.environment !== environment) {
+      environment = props.__relayContext.environment;
       if (__DEV__) {
-        const {isRelayModernEnvironment} = require('RelayRuntime');
+        const {isRelayModernEnvironment} = require('relay-runtime');
         if (!isRelayModernEnvironment(environment)) {
           throw new Error(
             'RelayModernContainer: Can only use Relay Modern component ' +
@@ -70,19 +68,39 @@ function buildReactRelayContainer<TBase: React$ComponentType<*>>(
       const {getFragment: getFragmentFromTag} = environment.unstable_internal;
       const fragments = mapObject(fragmentSpec, getFragmentFromTag);
       Container = createContainerWithFragments(ComponentClass, fragments);
+
+      // Attach static lifecycle to wrapper component so React can see it.
+      ContainerConstructor.getDerivedStateFromProps = (Container: any).getDerivedStateFromProps;
     }
-    /* $FlowFixMe(>=0.53.0) This comment suppresses an
-     * error when upgrading Flow's support for React. Common errors found when
-     * upgrading Flow's React support are documented at
-     * https://fburl.com/eq7bs81w */
-    return new Container(props, context);
+    // $FlowFixMe
+    return new Container(props);
   }
-  ContainerConstructor.contextTypes = containerContextTypes;
-  ContainerConstructor.displayName = containerName;
+
+  function forwardRef(props, ref) {
+    const context = readContext(ReactRelayContext);
+    invariant(
+      context,
+      `${containerName} tried to render a context that was ` +
+        `not valid this means that ${containerName} was rendered outside of a ` +
+        'query renderer.',
+    );
+
+    return (
+      <ContainerConstructor
+        {...props}
+        __relayContext={context}
+        componentRef={props.componentRef || ref}
+      />
+    );
+  }
+  forwardRef.displayName = containerName;
+  // $FlowExpectedError See https://github.com/facebook/flow/issues/6103
+  const ForwardContainer = React.forwardRef(forwardRef);
 
   if (__DEV__) {
+    ForwardContainer.__ComponentClass = ComponentClass;
     // Classic container static methods.
-    ContainerConstructor.getFragment = function getFragmentOnModernContainer() {
+    ForwardContainer.getFragment = function getFragmentOnModernContainer() {
       throw new Error(
         `RelayModernContainer: ${containerName}.getFragment() was called on ` +
           'a Relay Modern component by a Relay Classic or Relay Compat ' +
@@ -95,7 +113,7 @@ function buildReactRelayContainer<TBase: React$ComponentType<*>>(
     };
   }
 
-  return (ContainerConstructor: any);
+  return ForwardContainer;
 }
 
 module.exports = buildReactRelayContainer;

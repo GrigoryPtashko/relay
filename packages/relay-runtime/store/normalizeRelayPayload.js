@@ -1,27 +1,24 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule normalizeRelayPayload
- * @flow
+ * @flow strict-local
  * @format
  */
 
 'use strict';
 
-const RelayInMemoryRecordSource = require('RelayInMemoryRecordSource');
-const RelayModernRecord = require('RelayModernRecord');
-const RelayResponseNormalizer = require('RelayResponseNormalizer');
+const RelayInMemoryRecordSource = require('./RelayInMemoryRecordSource');
+const RelayModernRecord = require('./RelayModernRecord');
+const RelayResponseNormalizer = require('./RelayResponseNormalizer');
 
-const {ROOT_ID, ROOT_TYPE} = require('RelayStoreUtils');
+const {ROOT_ID, ROOT_TYPE} = require('./RelayStoreUtils');
 
-import type {PayloadData, PayloadError} from 'RelayNetworkTypes';
-import type {NormalizationOptions} from 'RelayResponseNormalizer';
-import type {RelayResponsePayload, Selector} from 'RelayStoreTypes';
+import type {PayloadData, PayloadError} from '../network/RelayNetworkTypes';
+import type {NormalizationOptions} from './RelayResponseNormalizer';
+import type {RelayResponsePayload, Selector} from './RelayStoreTypes';
 
 function normalizeRelayPayload(
   selector: Selector,
@@ -31,7 +28,7 @@ function normalizeRelayPayload(
 ): RelayResponsePayload {
   const source = new RelayInMemoryRecordSource();
   source.set(ROOT_ID, RelayModernRecord.create(ROOT_ID, ROOT_TYPE));
-  const fieldPayloads = RelayResponseNormalizer.normalize(
+  const {fieldPayloads, matchPayloads} = RelayResponseNormalizer.normalize(
     source,
     selector,
     payload,
@@ -40,6 +37,7 @@ function normalizeRelayPayload(
   return {
     errors,
     fieldPayloads,
+    matchPayloads,
     source,
   };
 }

@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @format
  * @emails oncall+relay
@@ -111,7 +109,13 @@ describe('scope', () => {
       const outerScope = {
         outerSize: {kind: 'Variable', name: 'var'},
       };
-      const innerScope = getFragmentScope(definitions, calls, outerScope);
+      const fragmentName = 'FragmentName';
+      const innerScope = getFragmentScope(
+        definitions,
+        calls,
+        outerScope,
+        fragmentName,
+      );
       expect(innerScope).toEqual({
         size: outerScope.outerSize,
       });
@@ -143,7 +147,13 @@ describe('scope', () => {
       const outerScope = {
         outerSize: {kind: 'Literal', value: 42},
       };
-      const innerScope = getFragmentScope(definitions, calls, outerScope);
+      const fragmentName = 'FragmentName';
+      const innerScope = getFragmentScope(
+        definitions,
+        calls,
+        outerScope,
+        fragmentName,
+      );
       expect(innerScope).toEqual({
         size: outerScope.outerSize,
       });
@@ -174,7 +184,13 @@ describe('scope', () => {
         },
       ];
       const outerScope = {};
-      const innerScope = getFragmentScope(definitions, calls, outerScope);
+      const fragmentName = 'FragmentName';
+      const innerScope = getFragmentScope(
+        definitions,
+        calls,
+        outerScope,
+        fragmentName,
+      );
       expect(innerScope).toEqual({
         size: literal,
       });
@@ -198,7 +214,13 @@ describe('scope', () => {
       ];
       const calls = [];
       const outerScope = {};
-      const innerScope = getFragmentScope(definitions, calls, outerScope);
+      const fragmentName = 'FragmentName';
+      const innerScope = getFragmentScope(
+        definitions,
+        calls,
+        outerScope,
+        fragmentName,
+      );
       expect(innerScope).toEqual({
         size: literal,
       });
@@ -221,9 +243,13 @@ describe('scope', () => {
       ];
       const calls = [];
       const outerScope = {};
+      const fragmentName = 'FragmentName';
       expect(() => {
-        getFragmentScope(definitions, calls, outerScope);
-      }).toThrow();
+        getFragmentScope(definitions, calls, outerScope, fragmentName);
+      }).toThrow(
+        'RelayCompilerScope: No value found for required argument ' +
+          '`$size: Int!` in `FragmentName`.',
+      );
     });
 
     /**
@@ -242,7 +268,13 @@ describe('scope', () => {
       ];
       const calls = [];
       const outerScope = {};
-      const innerScope = getFragmentScope(definitions, calls, outerScope);
+      const fragmentName = 'FragmentName';
+      const innerScope = getFragmentScope(
+        definitions,
+        calls,
+        outerScope,
+        fragmentName,
+      );
       expect(innerScope).toEqual({
         size: {
           kind: 'Variable',
@@ -277,9 +309,14 @@ describe('scope', () => {
         },
       ];
       const outerScope = {};
+      const fragmentName = 'FragmentName';
       expect(() => {
-        getFragmentScope(definitions, calls, outerScope);
-      }).toThrow();
+        getFragmentScope(definitions, calls, outerScope, fragmentName);
+      }).toThrow(
+        'RelayCompilerScope: Unexpected argument for global variable `size` ' +
+          'for `FragmentName`. @arguments may only be provided for ' +
+          "variables defined in the fragment's @argumentDefinitions list.",
+      );
     });
   });
 });

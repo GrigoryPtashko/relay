@@ -1,0 +1,36 @@
+query NameRendererQuery($id: ID!) {
+  node(id: $id) {
+    ...NameRendererFragment
+  }
+}
+
+fragment NameRendererFragment on User {
+  id
+  nameRenderer
+    @match(
+      onTypes: [
+        {
+          fragment: "PlainUserNameRenderer_name"
+          module: "PlainUserNameRenderer.react"
+        }
+        {
+          fragment: "MarkdownUserNameRenderer_name"
+          module: "MarkdownUserNameRenderer.react"
+        }
+      ]
+    )
+}
+
+fragment PlainUserNameRenderer_name on PlainUserNameRenderer {
+  plaintext
+  data {
+    text
+  }
+}
+
+fragment MarkdownUserNameRenderer_name on MarkdownUserNameRenderer {
+  markdown
+  data {
+    markup
+  }
+}

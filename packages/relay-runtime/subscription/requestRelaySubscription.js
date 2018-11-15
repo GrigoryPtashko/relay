@@ -1,28 +1,26 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule requestRelaySubscription
  * @flow
  * @format
  */
 
 'use strict';
 
-const setRelayModernMutationConfigs = require('setRelayModernMutationConfigs');
+const RelayDeclarativeMutationConfig = require('../mutations/RelayDeclarativeMutationConfig');
+
 const warning = require('warning');
 
-import type {Disposable} from 'RelayCombinedEnvironmentTypes';
-import type {GraphQLTaggedNode} from 'RelayModernGraphQLTag';
-import type {Environment, SelectorStoreUpdater} from 'RelayStoreTypes';
-import type {RelayMutationConfig, Variables} from 'RelayTypes';
+import type {DeclarativeMutationConfig} from '../mutations/RelayDeclarativeMutationConfig';
+import type {GraphQLTaggedNode} from '../query/RelayModernGraphQLTag';
+import type {Environment, SelectorStoreUpdater} from '../store/RelayStoreTypes';
+import type {Disposable, Variables} from '../util/RelayRuntimeTypes';
 
 export type GraphQLSubscriptionConfig = {|
-  configs?: Array<RelayMutationConfig>,
+  configs?: Array<DeclarativeMutationConfig>,
   subscription: GraphQLTaggedNode,
   variables: Variables,
   onCompleted?: ?() => void,
@@ -35,8 +33,13 @@ function requestRelaySubscription(
   environment: Environment,
   config: GraphQLSubscriptionConfig,
 ): Disposable {
-  const {createOperationSelector, getOperation} = environment.unstable_internal;
-  const subscription = getOperation(config.subscription);
+  const {createOperationSelector, getRequest} = environment.unstable_internal;
+  const subscription = getRequest(config.subscription);
+  if (subscription.operationKind !== 'subscription') {
+    throw new Error(
+      'requestRelaySubscription: Must use Subscription operation',
+    );
+  }
   const {configs, onCompleted, onError, onNext, variables} = config;
   const operation = createOperationSelector(subscription, variables);
 
@@ -46,7 +49,7 @@ function requestRelaySubscription(
   );
 
   const {updater} = configs
-    ? setRelayModernMutationConfigs(
+    ? RelayDeclarativeMutationConfig.convert(
         configs,
         subscription,
         null /* optimisticUpdater */,

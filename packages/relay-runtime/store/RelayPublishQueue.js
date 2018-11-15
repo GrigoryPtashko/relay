@@ -1,29 +1,27 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @flow
- * @providesModule RelayPublishQueue
+ * @flow strict-local
  * @format
  */
 
 'use strict';
 
-const RelayInMemoryRecordSource = require('RelayInMemoryRecordSource');
-const RelayReader = require('RelayReader');
-const RelayRecordSourceMutator = require('RelayRecordSourceMutator');
-const RelayRecordSourceProxy = require('RelayRecordSourceProxy');
-const RelayRecordSourceSelectorProxy = require('RelayRecordSourceSelectorProxy');
+const ErrorUtils = require('ErrorUtils');
+const RelayInMemoryRecordSource = require('./RelayInMemoryRecordSource');
+const RelayReader = require('./RelayReader');
+const RelayRecordSourceMutator = require('../mutations/RelayRecordSourceMutator');
+const RelayRecordSourceProxy = require('../mutations/RelayRecordSourceProxy');
+const RelayRecordSourceSelectorProxy = require('../mutations/RelayRecordSourceSelectorProxy');
 
 const invariant = require('invariant');
-const normalizeRelayPayload = require('normalizeRelayPayload');
+const normalizeRelayPayload = require('./normalizeRelayPayload');
 
-import type {SelectorData} from 'RelayCombinedEnvironmentTypes';
-import type {HandlerProvider} from 'RelayDefaultHandlerProvider';
+import type {HandlerProvider} from '../handlers/RelayDefaultHandlerProvider';
+import type {Disposable} from '../util/RelayRuntimeTypes';
 import type {
   HandleFieldPayload,
   MutableRecordSource,
@@ -34,7 +32,8 @@ import type {
   StoreUpdater,
   RecordSource,
   RelayResponsePayload,
-} from 'RelayStoreTypes';
+} from './RelayStoreTypes';
+import type {SelectorData} from 'react-relay/classic/environment/RelayCombinedEnvironmentTypes';
 
 type Payload = {
   fieldPayloads: ?Array<HandleFieldPayload>,
@@ -84,6 +83,8 @@ class RelayPublishQueue {
   // Optimistic updaters that are already added and might be rerun in order to
   // rebase them.
   _appliedOptimisticUpdates: Set<OptimisticUpdate>;
+  // Garbage collection hold, should rerun gc on dispose
+  _gcHold: ?Disposable;
 
   constructor(store: Store, handlerProvider?: ?HandlerProvider) {
     this._backup = new RelayInMemoryRecordSource();
@@ -94,6 +95,7 @@ class RelayPublishQueue {
     this._pendingOptimisticUpdates = new Set();
     this._store = store;
     this._appliedOptimisticUpdates = new Set();
+    this._gcHold = null;
   }
 
   /**
@@ -177,6 +179,16 @@ class RelayPublishQueue {
     this._commitUpdaters();
     this._applyUpdates();
     this._pendingBackupRebase = false;
+    if (this._appliedOptimisticUpdates.size > 0) {
+      if (!this._gcHold) {
+        this._gcHold = this._store.holdGC();
+      }
+    } else {
+      if (this._gcHold) {
+        this._gcHold.dispose();
+        this._gcHold = null;
+      }
+    }
     this._store.notify();
   }
 
@@ -238,7 +250,13 @@ class RelayPublishQueue {
         sink,
       );
       const store = new RelayRecordSourceProxy(mutator);
-      updater(store);
+      ErrorUtils.applyWithGuard(
+        updater,
+        null,
+        [store],
+        null,
+        'RelayPublishQueue:commitUpdaters',
+      );
     });
     this._store.publish(sink);
     this._pendingUpdaters.clear();
@@ -274,10 +292,25 @@ class RelayPublishQueue {
               selectorData = lookupSelector(source, operation.fragment);
             }
             selectorStoreUpdater &&
-              selectorStoreUpdater(selectorStore, selectorData);
-          } else {
+              ErrorUtils.applyWithGuard(
+                selectorStoreUpdater,
+                null,
+                [selectorStore, selectorData],
+                null,
+                'RelayPublishQueue:applyUpdates',
+              );
+          } else if (optimisticUpdate.storeUpdater) {
             const {storeUpdater} = optimisticUpdate;
-            storeUpdater(store);
+            ErrorUtils.applyWithGuard(
+              storeUpdater,
+              null,
+              [store],
+              null,
+              'RelayPublishQueue:applyUpdates',
+            );
+          } else {
+            const {source, fieldPayloads} = optimisticUpdate;
+            store.publishSource(source, fieldPayloads);
           }
         });
       }
@@ -299,10 +332,25 @@ class RelayPublishQueue {
               selectorData = lookupSelector(source, operation.fragment);
             }
             selectorStoreUpdater &&
-              selectorStoreUpdater(selectorStore, selectorData);
-          } else {
+              ErrorUtils.applyWithGuard(
+                selectorStoreUpdater,
+                null,
+                [selectorStore, selectorData],
+                null,
+                'RelayPublishQueue:applyUpdates',
+              );
+          } else if (optimisticUpdate.storeUpdater) {
             const {storeUpdater} = optimisticUpdate;
-            storeUpdater(store);
+            ErrorUtils.applyWithGuard(
+              storeUpdater,
+              null,
+              [store],
+              null,
+              'RelayPublishQueue:applyUpdates',
+            );
+          } else {
+            const {source, fieldPayloads} = optimisticUpdate;
+            store.publishSource(source, fieldPayloads);
           }
           this._appliedOptimisticUpdates.add(optimisticUpdate);
         });
@@ -317,7 +365,7 @@ class RelayPublishQueue {
 function lookupSelector(source, selector): ?SelectorData {
   const selectorData = RelayReader.read(source, selector).data;
   if (__DEV__) {
-    const deepFreeze = require('deepFreeze');
+    const deepFreeze = require('../util/deepFreeze');
     if (selectorData) {
       deepFreeze(selectorData);
     }

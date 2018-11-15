@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @format
  * @emails oncall+relay
@@ -13,9 +11,7 @@
 'use strict';
 
 const RelayModernTestUtils = require('RelayModernTestUtils');
-const RelayStoreUtils = require('RelayStoreUtils');
-
-const formatStorageKey = require('formatStorageKey');
+const RelayStoreUtils = require('../RelayStoreUtils');
 
 const {generateAndCompile} = RelayModernTestUtils;
 
@@ -65,7 +61,7 @@ describe('RelayStoreUtils', () => {
       );
       const field = UserFragment.selections[0];
       expect(RelayStoreUtils.getStorageKey(field, {})).toBe(
-        'profilePicture{"size":128}',
+        'profilePicture(size:128)',
       );
     });
 
@@ -83,7 +79,7 @@ describe('RelayStoreUtils', () => {
       );
       const field = UserFragment.selections[0];
       expect(RelayStoreUtils.getStorageKey(field, {size: 256})).toBe(
-        'profilePicture{"size":256}',
+        'profilePicture(size:256)',
       );
     });
 
@@ -103,7 +99,7 @@ describe('RelayStoreUtils', () => {
       const field = UserFragment.selections[0];
       expect(
         RelayStoreUtils.getStorageKey(field, {preset: null, size: 128}),
-      ).toBe('profilePicture{"size":128}');
+      ).toBe('profilePicture(size:128)');
     });
 
     it('suppresses the argument list if all values are unset', () => {
@@ -140,15 +136,15 @@ describe('RelayStoreUtils', () => {
 
       // Note that storage key employs stable lexicographical ordering anyway.
       expect(RelayStoreUtils.getStorageKey(field, {})).toBe(
-        'storySearch{"query":{"limit":10,"offset":100,"text":"foo"}}',
+        'storySearch(query:{"limit":10,"offset":100,"text":"foo"})',
       );
     });
   });
 
-  describe('formatStorageKey()', () => {
+  describe('getStableStorageKey()', () => {
     it('imposes a stable ordering', () => {
       const fieldName = 'foo';
-      const argsWithValues = {
+      const argValues = {
         first: 10,
         orderBy: ['name', 'age', 'date'],
         filter: {
@@ -157,35 +153,37 @@ describe('RelayStoreUtils', () => {
           maxCost: 20,
         },
       };
-      expect(formatStorageKey(fieldName, argsWithValues)).toBe(
-        'foo{"filter":{"color":"red","maxCost":20,"minSize":200},' +
-          '"first":10,"orderBy":["name","age","date"]}',
+      expect(RelayStoreUtils.getStableStorageKey(fieldName, argValues)).toBe(
+        'foo(filter:{"color":"red","maxCost":20,"minSize":200},' +
+          'first:10,orderBy:["name","age","date"])',
       );
     });
 
     it('filters arguments without values', () => {
       const fieldName = 'foo';
-      const argsWithValues = {
+      const argValues = {
         first: 10,
         orderBy: null,
       };
-      expect(formatStorageKey(fieldName, argsWithValues)).toBe(
-        'foo{"first":10}',
+      expect(RelayStoreUtils.getStableStorageKey(fieldName, argValues)).toBe(
+        'foo(first:10)',
       );
     });
 
     it('suppresses the argument list if all values are unset', () => {
       const fieldName = 'foo';
-      const argsWithValues = {
+      const argValues = {
         first: undefined,
         orderBy: null,
       };
-      expect(formatStorageKey(fieldName, argsWithValues)).toBe('foo');
+      expect(RelayStoreUtils.getStableStorageKey(fieldName, argValues)).toBe(
+        'foo',
+      );
     });
 
     it('disregards a null or undefined arguments object', () => {
-      expect(formatStorageKey('foo')).toBe('foo');
-      expect(formatStorageKey('bar', null)).toBe('bar');
+      expect(RelayStoreUtils.getStableStorageKey('foo')).toBe('foo');
+      expect(RelayStoreUtils.getStableStorageKey('bar', null)).toBe('bar');
     });
   });
 });

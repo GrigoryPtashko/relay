@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails oncall+relay
  * @format
@@ -12,17 +10,20 @@
 
 'use strict';
 
-jest.enableAutomock().useFakeTimers();
+jest
+  .mock('fetch')
+  .mock('fetchWithRetries')
+  .useFakeTimers();
 
 require('configureForRelayOSS');
 
-const RelayClassic = require('RelayClassic');
-const {ConnectionInterface} = require('RelayRuntime');
-const RelayDefaultNetworkLayer = require('RelayDefaultNetworkLayer');
-const RelayMetaRoute = require('RelayMetaRoute');
-const RelayMutationRequest = require('RelayMutationRequest');
-const RelayQuery = require('RelayQuery');
-const RelayQueryRequest = require('RelayQueryRequest');
+const RelayClassic = require('../../RelayPublic');
+const {ConnectionInterface} = require('relay-runtime');
+const RelayDefaultNetworkLayer = require('../RelayDefaultNetworkLayer');
+const RelayMetaRoute = require('../../../route/RelayMetaRoute');
+const RelayMutationRequest = require('../../../network/RelayMutationRequest');
+const RelayQuery = require('../../../query/RelayQuery');
+const RelayQueryRequest = require('../../../network/RelayQueryRequest');
 const RelayTestUtils = require('RelayTestUtils');
 
 const fetch = require('fetch');
@@ -103,7 +104,10 @@ describe('RelayDefaultNetworkLayer', () => {
         {inputType: 'FeedbackLikeInput'},
       );
       request = new RelayMutationRequest(mutation);
-      request.then(responseCallback).catch(rejectCallback);
+      request
+        .getPromise()
+        .then(responseCallback)
+        .catch(rejectCallback);
     });
 
     it('sends correct data to server', () => {
@@ -344,8 +348,22 @@ describe('RelayDefaultNetworkLayer', () => {
       const resolveACallback = jest.fn();
       const resolveBCallback = jest.fn();
       networkLayer.sendQueries([requestA, requestB]);
-      requestA.done(resolveACallback);
-      requestB.done(resolveBCallback);
+      requestA
+        .getPromise()
+        .then(resolveACallback)
+        .catch(error => {
+          setTimeout(() => {
+            throw error;
+          }, 0);
+        });
+      requestB
+        .getPromise()
+        .then(resolveBCallback)
+        .catch(error => {
+          setTimeout(() => {
+            throw error;
+          }, 0);
+        });
       jest.runAllTimers();
 
       const payloadA = {
@@ -371,7 +389,7 @@ describe('RelayDefaultNetworkLayer', () => {
     it('rejects invalid JSON response payloads', () => {
       const rejectCallback = jest.fn();
       networkLayer.sendQueries([requestA]);
-      requestA.catch(rejectCallback);
+      requestA.getPromise().catch(rejectCallback);
       jest.runAllTimers();
 
       fetchWithRetries.mock.deferreds[0].resolve({
@@ -390,7 +408,7 @@ describe('RelayDefaultNetworkLayer', () => {
     it('rejects errors in query responses', () => {
       const rejectCallback = jest.fn();
       networkLayer.sendQueries([requestA]);
-      requestA.catch(rejectCallback);
+      requestA.getPromise().catch(rejectCallback);
       jest.runAllTimers();
 
       const payloadA = {
@@ -430,8 +448,15 @@ describe('RelayDefaultNetworkLayer', () => {
       const rejectACallback = jest.fn();
       const resolveBCallback = jest.fn();
       networkLayer.sendQueries([requestA, requestB]);
-      requestA.catch(rejectACallback);
-      requestB.done(resolveBCallback);
+      requestA.getPromise().catch(rejectACallback);
+      requestB
+        .getPromise()
+        .then(resolveBCallback)
+        .catch(error => {
+          setTimeout(() => {
+            throw error;
+          }, 0);
+        });
       jest.runAllTimers();
 
       const payload = {

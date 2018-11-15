@@ -1,12 +1,10 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @flow
+ * @flow strict-local
  * @format
  */
 
@@ -14,7 +12,7 @@
 
 const React = require('React');
 
-const {graphql, createRefetchContainer} = require('ReactRelayPublic');
+const {graphql, createRefetchContainer} = require('../ReactRelayPublic');
 
 /**
  * Verifies that normal prop type checking works correctly on Relay components.
@@ -47,9 +45,7 @@ class FooComponent extends React.Component {
 
     const defLen = this.props.defaultProp.length; // always a valid string, so no error
     return (
-      <div>
-        {reqLen && optionalProp && optionalFoo && missing && defLen}
-      </div>
+      <div>{reqLen && optionalProp && optionalFoo && missing && defLen}</div>
     );
   }
 }
@@ -127,20 +123,20 @@ module.exports = {
      * upgrading Flow's React support are documented at
      * https://fburl.com/eq7bs81w */
     class ProxyChecker extends React.PureComponent {
-      _fooRef: ?Foo;
+      _fooRef: ?FooComponent;
       getString(): string {
         const ok = this._fooRef ? this._fooRef.getNum() : 'default'; // legit
 
-        /** $ShouldBeFlowExpectedError: Foo does not have `missingMethod` **/
+        /** $FlowExpectedError: Foo does not have `missingMethod` **/
         const bad = this._fooRef ? this._fooRef.missingMethod() : 'default';
 
-        /** $ShouldBeFlowExpectedError: Foo `getNum` gives number, but `getString` assumes string  **/
+        /** $FlowExpectedError: Foo `getNum` gives number, but `getString` assumes string  **/
         return bad ? 'not good' : ok;
       }
       render() {
         return (
           <Foo
-            ref={ref => {
+            componentRef={ref => {
               this._fooRef = ref;
             }}
             requiredProp="bar"

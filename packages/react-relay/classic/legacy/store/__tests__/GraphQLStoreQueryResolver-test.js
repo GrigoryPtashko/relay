@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails oncall+relay
  * @format
@@ -12,23 +10,19 @@
 
 'use strict';
 
-jest.enableAutomock();
-
 require('configureForRelayOSS');
 
-jest.useFakeTimers();
 jest
-  .unmock('GraphQLRange')
-  .unmock('GraphQLSegment')
-  .unmock('GraphQLStoreQueryResolver');
+  .mock('../../../store/readRelayQueryData')
+  .mock('../GraphQLStoreChangeEmitter')
+  .useFakeTimers();
 
-const GraphQLStoreQueryResolver = require('GraphQLStoreQueryResolver');
-const RelayClassic = require('RelayClassic');
-const RelayStoreData = require('RelayStoreData');
+const GraphQLStoreQueryResolver = require('../GraphQLStoreQueryResolver');
+const RelayClassic = require('../../../RelayPublic');
+const RelayStoreData = require('../../../store/RelayStoreData');
 const RelayTestUtils = require('RelayTestUtils');
 
-const readRelayQueryData = require('readRelayQueryData');
-const transformRelayQueryPayload = require('transformRelayQueryPayload');
+const readRelayQueryData = require('../../../store/readRelayQueryData');
 
 describe('GraphQLStoreQueryResolver', () => {
   let changeEmitter;
@@ -185,7 +179,7 @@ describe('GraphQLStoreQueryResolver', () => {
       mockCallback,
     );
 
-    require('GraphQLStoreRangeUtils').getCanonicalClientID =
+    require('../GraphQLStoreRangeUtils').getCanonicalClientID =
       // The canonical ID of a range customarily excludes the calls
       jest.fn(() => 'client:123');
 
@@ -307,137 +301,5 @@ describe('GraphQLStoreQueryResolver', () => {
 
     expect(resolvedA.length).toBe(2);
     expect(resolvedB.length).toBe(1);
-  });
-
-  describe('garbage collection', () => {
-    let fragment;
-
-    beforeEach(() => {
-      storeData.initializeGarbageCollector(run => {
-        while (run()) {}
-      });
-      const containerFragment = RelayTestUtils.createContainerFragment(
-        RelayClassic.QL`
-        fragment on NewsFeedConnection {
-          edges {
-            node {
-              id
-            }
-          }
-        }
-      `,
-      );
-      const concreteFragment = RelayClassic.QL`
-        fragment on Viewer {
-          actor {
-            id
-          }
-          newsFeed(first: 1) {
-            ${containerFragment}
-          }
-        }
-      `;
-      const query = getNode(
-        RelayClassic.QL`
-        query {
-          viewer {
-            ${concreteFragment}
-          }
-        }
-      `,
-      );
-      const payload = {
-        viewer: {
-          actor: {
-            __typename: 'User',
-            id: '123',
-          },
-          newsFeed: {
-            edges: [
-              {
-                node: {
-                  __typename: 'Story',
-                  id: '456',
-                },
-              },
-            ],
-          },
-        },
-      };
-      storeData.handleQueryPayload(
-        query,
-        transformRelayQueryPayload(query, payload),
-        1,
-      );
-      dataID = 'client:1';
-      fragment = getNode(concreteFragment);
-    });
-
-    it('increments references to read data', () => {
-      const queryResolver = new GraphQLStoreQueryResolver(
-        storeData,
-        fragment,
-        jest.fn(),
-      );
-      // read data and set up subscriptions
-      queryResolver.resolve(fragment, dataID);
-      // evict unreferenced nodes
-      storeData.getGarbageCollector().collect();
-      jest.runAllTimers();
-      // nodes referenced by the fragment should not be evicted
-      expect(Object.keys(storeData.getNodeData())).toEqual([
-        '123', // viewer.actor
-        'client:1', // viewer
-        'client:2', // viewer.newsFeed
-      ]);
-    });
-
-    it('decrements references to previously read fields', () => {
-      const queryResolver = new GraphQLStoreQueryResolver(
-        storeData,
-        fragment,
-        jest.fn(),
-      );
-      // read data and increment GC ref counts
-      queryResolver.resolve(fragment, dataID);
-      const callback = storeData.getChangeEmitter().addListenerForIDs.mock
-        .calls[0][1];
-
-      // Remove the link to viewer.actor and broadcast an update
-      storeData.getRecordWriter().putField('client:1', 'actor', null);
-      storeData.getRecordWriter().putField('client:1', 'newsFeed', null);
-      callback(['client:1']);
-
-      // re-read and increment/decrement GC ref counts
-      queryResolver.resolve(fragment, dataID);
-
-      // evict unreferenced nodes
-      storeData.getGarbageCollector().collect();
-      jest.runAllTimers();
-      // nodes referenced by the fragment should not be evicted
-      expect(Object.keys(storeData.getNodeData())).toEqual([
-        // '123' (actor) is unreferenced and collected
-        // 'client:2' (viewer.newsFeed) is unreferenced and collected
-        'client:1', // viewer
-      ]);
-    });
-
-    it('decrements references when disposed', () => {
-      const queryResolver = new GraphQLStoreQueryResolver(
-        storeData,
-        fragment,
-        jest.fn(),
-      );
-      // read data and increment GC ref counts
-      queryResolver.resolve(fragment, dataID);
-      // reset the resolver; should unreference all nodes
-      queryResolver.dispose();
-
-      // evict unreferenced nodes
-      storeData.getGarbageCollector().collect();
-      jest.runAllTimers();
-      // all nodes are unreferenced and should be removed
-      expect(storeData.getNodeData()).toEqual({});
-    });
   });
 });

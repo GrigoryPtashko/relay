@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails oncall+relay
  * @format
@@ -12,17 +10,13 @@
 
 'use strict';
 
-jest
-  .enableAutomock()
-  .unmock('GraphQLSegment')
-  .unmock('GraphQLRange')
-  .mock('warning');
+jest.mock('warning').mock('../../../store/RelayRecord');
 
 const RelayTestUtils = require('RelayTestUtils');
 
-const GraphQLRange = require('GraphQLRange');
-const {ConnectionInterface} = require('RelayRuntime');
-const RelayRecord = require('RelayRecord');
+const GraphQLRange = require('../GraphQLRange');
+const {ConnectionInterface} = require('relay-runtime');
+const RelayRecord = require('../../../store/RelayRecord');
 
 function getFirstSegment(range) {
   return range.__debug().orderedSegments[0];
@@ -79,7 +73,7 @@ describe('GraphQLRange', () => {
   let consoleWarn;
   let range;
 
-  let HAS_NEXT_PAGE, HAS_PREV_PAGE;
+  let HAS_NEXT_PAGE, HAS_PREV_PAGE, START_CURSOR, END_CURSOR;
 
   beforeEach(() => {
     jest.resetModules();
@@ -91,7 +85,12 @@ describe('GraphQLRange', () => {
     });
     range = new GraphQLRange();
 
-    ({HAS_NEXT_PAGE, HAS_PREV_PAGE} = ConnectionInterface.get());
+    ({
+      HAS_NEXT_PAGE,
+      HAS_PREV_PAGE,
+      START_CURSOR,
+      END_CURSOR,
+    } = ConnectionInterface.get());
 
     expect.extend(RelayTestUtils.matchers);
   });
@@ -510,6 +509,27 @@ describe('GraphQLRange', () => {
     expect(result.diffCalls.length).toBe(0);
   });
 
+  it('should error for invalid call value on adding', () => {
+    console.error = jest.fn();
+    const queryCalls = [{name: 'first', value: 3}, {name: 'last', value: 3}];
+
+    const pageInfo = {
+      [HAS_NEXT_PAGE]: true,
+      [HAS_PREV_PAGE]: false,
+    };
+
+    const result = range.addItems(queryCalls, first3Edges, pageInfo);
+
+    expect(console.error.mock.calls.length).toBe(1);
+    expect(console.error.mock.calls[0]).toEqual([
+      'GraphQLRange.addItems only handles first(<count>), ' +
+        'after(<cursor>).first(<count>), last(<count>), ' +
+        'before(<cursor>).last(<count>), before(<cursor>).first(<count>), ' +
+        'and after(<cursor>).last(<count>)',
+    ]);
+    expect(result).toBe(undefined);
+  });
+
   it('should error for first().last() query', () => {
     console.error = jest.fn();
     const queryCalls = [{name: 'first', value: 3}, {name: 'last', value: 3}];
@@ -518,7 +538,7 @@ describe('GraphQLRange', () => {
 
     expect(console.error.mock.calls.length).toBe(1);
     expect(console.error.mock.calls[0]).toEqual([
-      'GraphQLRange currently only handles first(<count>), ' +
+      'GraphQLRange.retrieveRangeInfoForQuery only handles first(<count>), ' +
         'after(<cursor>).first(<count>), last(<count>), ' +
         'before(<cursor>).last(<count>), before(<cursor>).first(<count>), ' +
         'and after(<cursor>).last(<count>)',
@@ -537,6 +557,8 @@ describe('GraphQLRange', () => {
     expect(result.diffCalls).toEqual([{name: 'first', value: 3}]);
     expect(result.pageInfo[HAS_PREV_PAGE]).toBe(false);
     expect(result.pageInfo[HAS_NEXT_PAGE]).toBe(true);
+    expect(result.pageInfo[START_CURSOR]).toBe(null);
+    expect(result.pageInfo[END_CURSOR]).toBe(null);
 
     const pageInfo = {
       [HAS_NEXT_PAGE]: true,
@@ -646,6 +668,8 @@ describe('GraphQLRange', () => {
     expect(result.diffCalls).toEqual([{name: 'last', value: 3}]);
     expect(result.pageInfo[HAS_PREV_PAGE]).toBe(true);
     expect(result.pageInfo[HAS_NEXT_PAGE]).toBe(false);
+    expect(result.pageInfo[START_CURSOR]).toBe(null);
+    expect(result.pageInfo[END_CURSOR]).toBe(null);
 
     const pageInfo = {
       [HAS_NEXT_PAGE]: false,

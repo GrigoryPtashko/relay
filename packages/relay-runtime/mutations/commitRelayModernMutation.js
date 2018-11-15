@@ -1,32 +1,30 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule commitRelayModernMutation
  * @flow
  * @format
  */
 
 'use strict';
 
+const RelayDeclarativeMutationConfig = require('./RelayDeclarativeMutationConfig');
+
 const invariant = require('invariant');
-const isRelayModernEnvironment = require('isRelayModernEnvironment');
-const setRelayModernMutationConfigs = require('setRelayModernMutationConfigs');
+const isRelayModernEnvironment = require('../store/isRelayModernEnvironment');
+const validateMutation = require('./validateMutation');
 const warning = require('warning');
 
-import type {Disposable} from 'RelayCombinedEnvironmentTypes';
-import type {GraphQLTaggedNode} from 'RelayModernGraphQLTag';
-import type {PayloadError, UploadableMap} from 'RelayNetworkTypes';
-import type {Environment, SelectorStoreUpdater} from 'RelayStoreTypes';
-import type {RelayMutationConfig} from 'RelayTypes';
-import type {Variables} from 'RelayTypes';
+import type {PayloadError, UploadableMap} from '../network/RelayNetworkTypes';
+import type {GraphQLTaggedNode} from '../query/RelayModernGraphQLTag';
+import type {Environment, SelectorStoreUpdater} from '../store/RelayStoreTypes';
+import type {Disposable, Variables} from '../util/RelayRuntimeTypes';
+import type {DeclarativeMutationConfig} from './RelayDeclarativeMutationConfig';
 
 export type MutationConfig<T> = {|
-  configs?: Array<RelayMutationConfig>,
+  configs?: Array<DeclarativeMutationConfig>,
   mutation: GraphQLTaggedNode,
   variables: Variables,
   uploadables?: UploadableMap,
@@ -47,11 +45,23 @@ function commitRelayModernMutation<T>(
 ): Disposable {
   invariant(
     isRelayModernEnvironment(environment),
-    'commitRelayModernMutation: expect `environment` to be an instance of ' +
-      '`RelayModernEnvironment`.',
+    'commitRelayModernMutation: expected `environment` to be an instance of ' +
+      '`RelayModernEnvironment`.\n' +
+      'When using Relay Modern and Relay Classic in the same ' +
+      'application, ensure mutations use Relay Compat to work in ' +
+      'both environments.\n' +
+      'See: http://facebook.github.io/relay/docs/relay-compat.html',
   );
-  const {createOperationSelector, getOperation} = environment.unstable_internal;
-  const mutation = getOperation(config.mutation);
+  const {createOperationSelector, getRequest} = environment.unstable_internal;
+  const mutation = getRequest(config.mutation);
+  if (mutation.operationKind !== 'mutation') {
+    throw new Error('commitRelayModernMutation: Expected mutation operation');
+  }
+  if (mutation.kind !== 'Request') {
+    throw new Error(
+      'commitRelayModernMutation: Expected mutation to be of type request',
+    );
+  }
   let {optimisticResponse, optimisticUpdater, updater} = config;
   const {configs, onError, variables, uploadables} = config;
   const operation = createOperationSelector(mutation, variables);
@@ -64,22 +74,13 @@ function commitRelayModernMutation<T>(
         'received a function.',
     );
   }
-  if (
-    optimisticResponse &&
-    mutation.query.selections &&
-    mutation.query.selections.length === 1 &&
-    mutation.query.selections[0].kind === 'LinkedField'
-  ) {
-    const mutationRoot = mutation.query.selections[0].name;
-    warning(
-      optimisticResponse[mutationRoot],
-      'commitRelayModernMutation: Expected `optimisticResponse` to be wrapped ' +
-        'in mutation name `%s`',
-      mutationRoot,
-    );
+  if (__DEV__) {
+    if (optimisticResponse instanceof Object) {
+      validateMutation(optimisticResponse, mutation, config.variables);
+    }
   }
   if (configs) {
-    ({optimisticUpdater, updater} = setRelayModernMutationConfigs(
+    ({optimisticUpdater, updater} = RelayDeclarativeMutationConfig.convert(
       configs,
       mutation,
       optimisticUpdater,

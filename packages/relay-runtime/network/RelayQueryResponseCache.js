@@ -1,27 +1,24 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayQueryResponseCache
- * @flow
+ * @flow strict-local
  * @format
  */
 
 'use strict';
 
 const invariant = require('invariant');
-const stableJSONStringify = require('stableJSONStringify');
+const stableCopy = require('../util/stableCopy');
 
-import type {QueryPayload} from 'RelayNetworkTypes';
-import type {Variables} from 'RelayTypes';
+import type {Variables} from '../util/RelayRuntimeTypes';
+import type {GraphQLResponse} from './RelayNetworkTypes';
 
 type Response = {
   fetchTime: number,
-  payload: QueryPayload,
+  payload: GraphQLResponse,
 };
 
 /**
@@ -55,7 +52,7 @@ class RelayQueryResponseCache {
     this._responses.clear();
   }
 
-  get(queryID: string, variables: Variables): ?QueryPayload {
+  get(queryID: string, variables: Variables): ?GraphQLResponse {
     const cacheKey = getCacheKey(queryID, variables);
     this._responses.forEach((response, key) => {
       if (!isCurrent(response.fetchTime, this._ttl)) {
@@ -66,7 +63,7 @@ class RelayQueryResponseCache {
     return response != null ? response.payload : null;
   }
 
-  set(queryID: string, variables: Variables, payload: QueryPayload): void {
+  set(queryID: string, variables: Variables, payload: GraphQLResponse): void {
     const fetchTime = Date.now();
     const cacheKey = getCacheKey(queryID, variables);
     this._responses.delete(cacheKey); // deletion resets key ordering
@@ -85,7 +82,7 @@ class RelayQueryResponseCache {
 }
 
 function getCacheKey(queryID: string, variables: Variables): string {
-  return stableJSONStringify({queryID, variables});
+  return JSON.stringify(stableCopy({queryID, variables}));
 }
 
 /**

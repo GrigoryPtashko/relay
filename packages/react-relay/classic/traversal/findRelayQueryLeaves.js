@@ -1,33 +1,30 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule findRelayQueryLeaves
  * @flow
  * @format
  */
 
 'use strict';
 
-const RelayClassicRecordState = require('RelayClassicRecordState');
-const RelayProfiler = require('RelayProfiler');
-const RelayQueryPath = require('RelayQueryPath');
-const RelayQueryVisitor = require('RelayQueryVisitor');
+const RelayClassicRecordState = require('../store/RelayClassicRecordState');
+const RelayQueryPath = require('../query/RelayQueryPath');
+const RelayQueryVisitor = require('../query/RelayQueryVisitor');
 
-const isCompatibleRelayFragmentType = require('isCompatibleRelayFragmentType');
+const isCompatibleRelayFragmentType = require('../tools/isCompatibleRelayFragmentType');
 
-const {ConnectionInterface} = require('RelayRuntime');
+const {ConnectionInterface, RelayProfiler} = require('relay-runtime');
 
-import type {Call, DataID} from 'RelayInternalTypes';
-import type RelayQuery from 'RelayQuery';
-import type {QueryPath} from 'RelayQueryPath';
-import type {RecordMap} from 'RelayRecord';
-import type RelayRecordStore from 'RelayRecordStore';
-import type {RangeInfo} from 'RelayRecordStore';
+import type RelayQuery from '../query/RelayQuery';
+import type {QueryPath} from '../query/RelayQueryPath';
+import type {RecordMap} from '../store/RelayRecord';
+import type RelayRecordStore from '../store/RelayRecordStore';
+import type {RangeInfo} from '../store/RelayRecordStore';
+import type {Call} from '../tools/RelayInternalTypes';
+import type {DataID} from 'relay-runtime';
 
 type FinderState = {
   dataID: DataID,

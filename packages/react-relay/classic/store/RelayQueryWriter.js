@@ -1,39 +1,36 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayQueryWriter
  * @flow
  * @format
  */
 
 'use strict';
 
-const RelayClassicRecordState = require('RelayClassicRecordState');
-const RelayNodeInterface = require('RelayNodeInterface');
-const RelayQuery = require('RelayQuery');
-const RelayQueryPath = require('RelayQueryPath');
-const RelayQueryVisitor = require('RelayQueryVisitor');
-const RelayRecord = require('RelayRecord');
+const RelayClassicRecordState = require('./RelayClassicRecordState');
+const RelayNodeInterface = require('../interface/RelayNodeInterface');
+const RelayQuery = require('../query/RelayQuery');
+const RelayQueryPath = require('../query/RelayQueryPath');
+const RelayQueryVisitor = require('../query/RelayQueryVisitor');
+const RelayRecord = require('./RelayRecord');
 
-const generateClientEdgeID = require('generateClientEdgeID');
-const generateClientID = require('generateClientID');
+const generateClientEdgeID = require('../legacy/store/generateClientEdgeID');
+const generateClientID = require('../legacy/store/generateClientID');
 const invariant = require('invariant');
-const isCompatibleRelayFragmentType = require('isCompatibleRelayFragmentType');
+const isCompatibleRelayFragmentType = require('../tools/isCompatibleRelayFragmentType');
 const warning = require('warning');
 
-const {ConnectionInterface} = require('RelayRuntime');
+const {ConnectionInterface} = require('relay-runtime');
 
-import type RelayChangeTracker from 'RelayChangeTracker';
-import type {DataID} from 'RelayInternalTypes';
-import type {QueryPath} from 'RelayQueryPath';
-import type RelayQueryTracker from 'RelayQueryTracker';
-import type RelayRecordStore from 'RelayRecordStore';
-import type RelayRecordWriter from 'RelayRecordWriter';
+import type {QueryPath} from '../query/RelayQueryPath';
+import type RelayChangeTracker from './RelayChangeTracker';
+import type RelayQueryTracker from './RelayQueryTracker';
+import type RelayRecordStore from './RelayRecordStore';
+import type RelayRecordWriter from './RelayRecordWriter';
+import type {DataID} from 'relay-runtime';
 
 type WriterOptions = {
   forceIndex?: ?number,
@@ -56,8 +53,6 @@ const {EXISTENT} = RelayClassicRecordState;
  * Helper for writing the result of one or more queries/operations into the
  * store, updating tracked queries, and recording changed record IDs.
  */
-/* $FlowFixMe - Flow error detected during the deployment of v0.38.0. To see the
- * error, remove this comment and run flow */
 class RelayQueryWriter extends RelayQueryVisitor<WriterState> {
   _changeTracker: RelayChangeTracker;
   _forceIndex: number;
@@ -358,7 +353,7 @@ class RelayQueryWriter extends RelayQueryVisitor<WriterState> {
       field.getFieldByStorageKey(EDGES) ||
       (connectionData != null &&
         typeof connectionData === 'object' &&
-        (connectionData: $FixMe)[EDGES])
+        (connectionData: $FlowFixMe)[EDGES])
     );
     const path = RelayQueryPath.getPath(state.path, field, connectionID);
     // always update the store to ensure the value is present in the appropriate
@@ -533,6 +528,9 @@ class RelayQueryWriter extends RelayQueryVisitor<WriterState> {
       // which would cause the generated ID here to not match the ID generated
       // in `_writeLink`.
       this.traverse(edges, {
+        /* $FlowFixMe(>=0.66.0) This comment suppresses an error found when Flow
+         * v0.66 was deployed. To see the error delete this comment and
+         * run Flow. */
         nodeID,
         path,
         recordID: edgeID,
@@ -597,7 +595,6 @@ class RelayQueryWriter extends RelayQueryVisitor<WriterState> {
       // Reuse existing generated IDs if the node does not have its own `id`.
       const prevLinkedID = prevLinkedIDs && prevLinkedIDs[nextIndex];
       const nextLinkedID = nextRecord[ID] || prevLinkedID || generateClientID();
-      // $FlowFixMe(>=0.33.0)
       nextLinkedIDs.push(nextLinkedID);
 
       // $FlowFixMe(>=0.33.0)
@@ -611,6 +608,8 @@ class RelayQueryWriter extends RelayQueryVisitor<WriterState> {
     });
     // Write the linked records before traverse to prevent generating extraneous
     // client ids.
+    /* $FlowFixMe(>=0.66.0) This comment suppresses an error found when Flow
+     * v0.66 was deployed. To see the error delete this comment and run Flow. */
     this._writer.putLinkedRecordIDs(recordID, storageKey, nextLinkedIDs);
     nextLinkedIDs.forEach(nextLinkedID => {
       /* $FlowFixMe(>=0.54.0) This comment suppresses an
@@ -621,6 +620,9 @@ class RelayQueryWriter extends RelayQueryVisitor<WriterState> {
         this.traverse(field, {
           nodeID: null, // never propagate `nodeID` past the first linked field
           path: itemData.path,
+          /* $FlowFixMe(>=0.66.0) This comment suppresses an error found when
+           * Flow v0.66 was deployed. To see the error delete this comment and
+           * run Flow. */
           recordID: nextLinkedID,
           responseData: itemData.record,
         });
@@ -686,6 +688,8 @@ class RelayQueryWriter extends RelayQueryVisitor<WriterState> {
     this.traverse(field, {
       nodeID: null,
       path,
+      /* $FlowFixMe(>=0.66.0) This comment suppresses an error found when Flow
+       * v0.66 was deployed. To see the error delete this comment and run Flow. */
       recordID: nextLinkedID,
       responseData: fieldData,
     });

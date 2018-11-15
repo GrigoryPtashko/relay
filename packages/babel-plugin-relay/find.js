@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @flow
  * @fullSyntaxTransform
@@ -14,8 +12,8 @@
 'use strict';
 
 function find<T>(
-  array: Array<T>,
-  predicate: (element: T, index: number, array: Array<T>) => boolean,
+  array: $ReadOnlyArray<T>,
+  predicate: (element: T, index: number, array: $ReadOnlyArray<T>) => boolean,
   context: any,
 ): ?T {
   for (var ii = 0; ii < array.length; ii++) {

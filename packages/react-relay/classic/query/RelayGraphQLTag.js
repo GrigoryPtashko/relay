@@ -1,27 +1,25 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayGraphQLTag
- * @flow
+ * @flow strict-local
  * @format
  */
 
 'use strict';
 
-const RelayQL = require('RelayQL');
+const QueryBuilder = require('./QueryBuilder');
+const RelayQL = require('./RelayQL');
 
 const invariant = require('invariant');
 
 import type {
   ConcreteFragmentDefinition,
   ConcreteOperationDefinition,
-} from 'ConcreteQuery';
-import type {GraphQLTaggedNode} from 'RelayModernGraphQLTag';
+} from './ConcreteQuery';
+import type {GraphQLTaggedNode} from 'relay-runtime';
 
 /**
  * Runtime function to correspond to the `graphql` tagged template function.
@@ -36,17 +34,19 @@ function graphql(): GraphQLTaggedNode {
   );
 }
 
-/**
- * Variant of the `graphql` tag that enables experimental features.
- */
-graphql.experimental = function(): GraphQLTaggedNode {
-  invariant(
-    false,
-    'graphql.experimental: Unexpected invocation at runtime. Either the ' +
-      'Babel transform was not set up, or it failed to identify this call ' +
-      'site. Make sure it is being used verbatim as `graphql.experimental`.',
+function isClassicFragment(taggedNode: GraphQLTaggedNode) {
+  return (
+    QueryBuilder.getFragmentDefinition(RelayQL.__getClassicNode(taggedNode)) !=
+    null
   );
-};
+}
+
+function isClassicOperation(taggedNode: GraphQLTaggedNode) {
+  return (
+    QueryBuilder.getOperationDefinition(RelayQL.__getClassicNode(taggedNode)) !=
+    null
+  );
+}
 
 function getClassicFragment(
   taggedNode: GraphQLTaggedNode,
@@ -64,4 +64,6 @@ module.exports = {
   getClassicFragment,
   getClassicOperation,
   graphql,
+  isClassicFragment,
+  isClassicOperation,
 };

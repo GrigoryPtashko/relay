@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails oncall+relay
  * @format
@@ -12,20 +10,23 @@
 
 'use strict';
 
-jest.enableAutomock().useFakeTimers();
-jest.unmock('RelayEnvironment');
+jest
+  .mock('../../legacy/store/GraphQLQueryRunner')
+  .mock('../readRelayQueryData')
+  .mock('../../mutation/RelayMutation')
+  .useFakeTimers();
 
 require('configureForRelayOSS');
 
-const RelayClassic = require('RelayClassic');
-const RelayEnvironment = require('RelayEnvironment');
-const RelayMutation = require('RelayMutation');
-const RelayMutationTransaction = require('RelayMutationTransaction');
-const RelayMutationTransactionStatus = require('RelayMutationTransactionStatus');
-const RelayMutationQueue = require('RelayMutationQueue');
+const RelayClassic = require('../../RelayPublic');
+const RelayEnvironment = require('../RelayEnvironment');
+const RelayMutation = require('../../mutation/RelayMutation');
+const RelayMutationTransaction = require('../../mutation/RelayMutationTransaction');
+const RelayMutationTransactionStatus = require('../../mutation/RelayMutationTransactionStatus');
+const RelayMutationQueue = require('../../mutation/RelayMutationQueue');
 const RelayTestUtils = require('RelayTestUtils');
 
-const readRelayQueryData = require('readRelayQueryData');
+const readRelayQueryData = require('../readRelayQueryData');
 
 const {CREATED, ROLLED_BACK, UNCOMMITTED} = RelayMutationTransactionStatus;
 

@@ -1,52 +1,36 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayFieldHandleTransform
  * @flow
  * @format
  */
 
 'use strict';
 
-// TODO T21875029 ../../relay-runtime/util/getRelayHandleKey
-const getRelayHandleKey = require('getRelayHandleKey');
 const invariant = require('invariant');
 
-const {
-  CompilerContext,
-  IRTransformer,
-} = require('../graphql-compiler/GraphQLCompilerPublic');
+const {CompilerContext, IRTransformer} = require('graphql-compiler');
+const {getRelayHandleKey} = require('relay-runtime');
 
-import type {Field} from '../graphql-compiler/GraphQLCompilerPublic';
-import type {GraphQLSchema} from 'graphql';
+import type {Field} from 'graphql-compiler';
 
-type State = true;
-
-function transform(
-  context: CompilerContext,
-  schema: GraphQLSchema,
-): CompilerContext {
-  return IRTransformer.transform(
-    context,
-    {
-      LinkedField: visitField,
-      ScalarField: visitField,
-    },
-    () => true,
-  );
+function relayFieldHandleTransform(context: CompilerContext): CompilerContext {
+  return IRTransformer.transform(context, {
+    LinkedField: visitField,
+    MatchField: visitField,
+    ScalarField: visitField,
+  });
 }
 
 /**
  * @internal
  */
-function visitField<F: Field>(field: F, state: State): F {
+function visitField<F: Field>(field: F): F {
   if (field.kind === 'LinkedField') {
-    field = this.traverse(field, state);
+    field = this.traverse(field);
   }
   const handles = field.handles;
   if (!handles || !handles.length) {
@@ -76,4 +60,6 @@ function visitField<F: Field>(field: F, state: State): F {
   }: $FlowIssue);
 }
 
-module.exports = {transform};
+module.exports = {
+  transform: relayFieldHandleTransform,
+};

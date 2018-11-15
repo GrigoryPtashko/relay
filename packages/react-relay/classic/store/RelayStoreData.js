@@ -1,78 +1,71 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayStoreData
  * @flow
  * @format
  */
 
 'use strict';
 
-const GraphQLQueryRunner = require('GraphQLQueryRunner');
-const GraphQLRange = require('GraphQLRange');
-const GraphQLStoreChangeEmitter = require('GraphQLStoreChangeEmitter');
-const GraphQLStoreRangeUtils = require('GraphQLStoreRangeUtils');
-const QueryBuilder = require('QueryBuilder');
-const RelayChangeTracker = require('RelayChangeTracker');
-const RelayClassicRecordState = require('RelayClassicRecordState');
-const RelayGarbageCollector = require('RelayGarbageCollector');
-const RelayMetaRoute = require('RelayMetaRoute');
-const RelayMutationQueue = require('RelayMutationQueue');
-const RelayNetworkLayer = require('RelayNetworkLayer');
-const RelayNodeInterface = require('RelayNodeInterface');
-const RelayPendingQueryTracker = require('RelayPendingQueryTracker');
-const RelayProfiler = require('RelayProfiler');
-const RelayQuery = require('RelayQuery');
-const RelayQueryPath = require('RelayQueryPath');
-const RelayQueryTracker = require('RelayQueryTracker');
-const RelayQueryWriter = require('RelayQueryWriter');
-const RelayRecord = require('RelayRecord');
-const RelayRecordStore = require('RelayRecordStore');
-const RelayRecordWriter = require('RelayRecordWriter');
-const RelayTaskQueue = require('RelayTaskQueue');
+const GraphQLQueryRunner = require('../legacy/store/GraphQLQueryRunner');
+const GraphQLRange = require('../legacy/store/GraphQLRange');
+const GraphQLStoreChangeEmitter = require('../legacy/store/GraphQLStoreChangeEmitter');
+const GraphQLStoreRangeUtils = require('../legacy/store/GraphQLStoreRangeUtils');
+const QueryBuilder = require('../query/QueryBuilder');
+const RelayChangeTracker = require('./RelayChangeTracker');
+const RelayClassicRecordState = require('./RelayClassicRecordState');
+const RelayMetaRoute = require('../route/RelayMetaRoute');
+const RelayMutationQueue = require('../mutation/RelayMutationQueue');
+const RelayNetworkLayer = require('../network/RelayNetworkLayer');
+const RelayNodeInterface = require('../interface/RelayNodeInterface');
+const RelayPendingQueryTracker = require('./RelayPendingQueryTracker');
+const RelayQuery = require('../query/RelayQuery');
+const RelayQueryPath = require('../query/RelayQueryPath');
+const RelayQueryTracker = require('./RelayQueryTracker');
+const RelayQueryWriter = require('./RelayQueryWriter');
+const RelayRecord = require('./RelayRecord');
+const RelayRecordStore = require('./RelayRecordStore');
+const RelayRecordWriter = require('./RelayRecordWriter');
+const RelayTaskQueue = require('../tools/RelayTaskQueue');
 
 const forEachObject = require('forEachObject');
-const generateForceIndex = require('generateForceIndex');
+const generateForceIndex = require('../legacy/store/generateForceIndex');
 const invariant = require('invariant');
 const mapObject = require('mapObject');
 const nullthrows = require('nullthrows');
-const warning = require('warning');
-const writeRelayQueryPayload = require('writeRelayQueryPayload');
-const writeRelayUpdatePayload = require('writeRelayUpdatePayload');
+const writeRelayQueryPayload = require('../traversal/writeRelayQueryPayload');
+const writeRelayUpdatePayload = require('../traversal/writeRelayUpdatePayload');
 
-const {ConnectionInterface} = require('RelayRuntime');
 const {
   restoreFragmentDataFromCache,
   restoreQueriesDataFromCache,
-} = require('restoreRelayCacheData');
+} = require('./restoreRelayCacheData');
+const {ConnectionInterface, RelayProfiler} = require('relay-runtime');
 
-import type {ChangeSet} from 'RelayChangeTracker';
-import type {GarbageCollectionScheduler} from 'RelayGarbageCollector';
+import type {QueryPath} from '../query/RelayQueryPath';
 import type {
   ClientMutationID,
-  DataID,
   NodeRangeMap,
   QueryPayload,
   RelayQuerySet,
   RootCallMap,
   UpdateOptions,
-} from 'RelayInternalTypes';
-import type {QueryPath} from 'RelayQueryPath';
-import type {RecordMap} from 'RelayRecord';
-import type {TaskScheduler} from 'RelayTaskQueue';
+} from '../tools/RelayInternalTypes';
+import type {TaskScheduler} from '../tools/RelayTaskQueue';
 import type {
   Abortable,
   CacheManager,
   CacheProcessorCallbacks,
-} from 'RelayTypes';
+} from '../tools/RelayTypes';
+import type {ChangeSet} from './RelayChangeTracker';
+import type {RecordMap} from './RelayRecord';
+import type {DataID} from 'relay-runtime';
 
 const {ID, ID_TYPE, NODE, NODE_TYPE, TYPENAME} = RelayNodeInterface;
-const {ROOT_ID} = require('RelayStoreConstants');
+const {ROOT_ID} = require('./RelayStoreConstants');
 const {EXISTENT} = RelayClassicRecordState;
 
 const idField = RelayQuery.Field.build({
@@ -96,7 +89,6 @@ class RelayStoreData {
   _cachedRootCallMap: RootCallMap;
   _cachedStore: RelayRecordStore;
   _changeEmitter: GraphQLStoreChangeEmitter;
-  _garbageCollector: ?RelayGarbageCollector;
   _mutationQueue: RelayMutationQueue;
   _networkLayer: RelayNetworkLayer;
   _nodeRangeMap: NodeRangeMap;
@@ -150,27 +142,6 @@ class RelayStoreData {
     this._rangeData = rangeData;
     this._rootCallMap = rootCallMap;
     this._taskQueue = new RelayTaskQueue();
-  }
-
-  /**
-   * Creates a garbage collector for this instance. After initialization all
-   * newly added DataIDs will be registered in the created garbage collector.
-   * This will show a warning if data has already been added to the instance.
-   */
-  initializeGarbageCollector(scheduler: GarbageCollectionScheduler): void {
-    invariant(
-      !this._garbageCollector,
-      'RelayStoreData: Garbage collector is already initialized.',
-    );
-    const shouldInitialize = this._isStoreDataEmpty();
-    warning(
-      shouldInitialize,
-      'RelayStoreData: Garbage collection can only be initialized when no ' +
-        'data is present.',
-    );
-    if (shouldInitialize) {
-      this._garbageCollector = new RelayGarbageCollector(this, scheduler);
-    }
   }
 
   /**
@@ -253,7 +224,6 @@ class RelayStoreData {
       this._queuedStore,
       this._cachedRecords,
       this._cachedRootCallMap,
-      this._garbageCollector,
       cacheManager,
       changeTracker,
       {
@@ -299,7 +269,6 @@ class RelayStoreData {
       this._queuedStore,
       this._cachedRecords,
       this._cachedRootCallMap,
-      this._garbageCollector,
       cacheManager,
       changeTracker,
       {
@@ -340,48 +309,49 @@ class RelayStoreData {
         updateTrackedQueries: true,
       },
     );
-    getRootsWithPayloads(
-      query,
-      payload,
-    ).forEach(({field, root, rootPayload}) => {
-      // Write the results of the field-specific query
-      writeRelayQueryPayload(writer, root, rootPayload);
+    getRootsWithPayloads(query, payload).forEach(
+      ({field, root, rootPayload}) => {
+        // Write the results of the field-specific query
+        writeRelayQueryPayload(writer, root, rootPayload);
 
-      // Ensure the root record exists
-      const path = RelayQueryPath.getRootRecordPath();
-      recordWriter.putRecord(ROOT_ID, query.getType(), path);
-      if (this._queuedStore.getRecordState(ROOT_ID) !== EXISTENT) {
-        changeTracker.createID(ROOT_ID);
-      } else {
-        changeTracker.updateID(ROOT_ID);
-      }
-
-      // Collect linked record ids for this root field
-      const dataIDs = [];
-      RelayNodeInterface.getResultsFromPayload(
-        root,
-        rootPayload,
-      ).forEach(({result, rootCallInfo}) => {
-        const {storageKey, identifyingArgKey} = rootCallInfo;
-        const dataID = recordWriter.getDataID(storageKey, identifyingArgKey);
-        if (dataID != null) {
-          dataIDs.push(dataID);
-        }
-      });
-
-      // Write the field to the root record
-      const storageKey = field.getStorageKey();
-      if (field.isPlural()) {
-        recordWriter.putLinkedRecordIDs(ROOT_ID, storageKey, dataIDs);
-      } else {
-        const dataID = dataIDs[0];
-        if (dataID != null) {
-          recordWriter.putLinkedRecordID(ROOT_ID, storageKey, dataID);
+        // Ensure the root record exists
+        const path = RelayQueryPath.getRootRecordPath();
+        recordWriter.putRecord(ROOT_ID, query.getType(), path);
+        if (this._queuedStore.getRecordState(ROOT_ID) !== EXISTENT) {
+          changeTracker.createID(ROOT_ID);
         } else {
-          recordWriter.putField(ROOT_ID, storageKey, null);
+          changeTracker.updateID(ROOT_ID);
         }
-      }
-    });
+
+        // Collect linked record ids for this root field
+        const dataIDs = [];
+        RelayNodeInterface.getResultsFromPayload(root, rootPayload).forEach(
+          ({result, rootCallInfo}) => {
+            const {storageKey, identifyingArgKey} = rootCallInfo;
+            const dataID = recordWriter.getDataID(
+              storageKey,
+              identifyingArgKey,
+            );
+            if (dataID != null) {
+              dataIDs.push(dataID);
+            }
+          },
+        );
+
+        // Write the field to the root record
+        const storageKey = field.getStorageKey();
+        if (field.isPlural()) {
+          recordWriter.putLinkedRecordIDs(ROOT_ID, storageKey, dataIDs);
+        } else {
+          const dataID = dataIDs[0];
+          if (dataID != null) {
+            recordWriter.putLinkedRecordID(ROOT_ID, storageKey, dataID);
+          } else {
+            recordWriter.putField(ROOT_ID, storageKey, null);
+          }
+        }
+      },
+    );
     this._handleChangedAndNewDataIDs(changeTracker.getChangeSet());
     profiler.stop();
   }
@@ -546,10 +516,6 @@ class RelayStoreData {
     return this._cachedRecords;
   }
 
-  getGarbageCollector(): ?RelayGarbageCollector {
-    return this._garbageCollector;
-  }
-
   getMutationQueue(): RelayMutationQueue {
     return this._mutationQueue;
   }
@@ -587,7 +553,7 @@ class RelayStoreData {
       this._records,
       this._rootCallMap,
       false, // isOptimistic
-      (this._nodeRangeMap: $FixMe),
+      (this._nodeRangeMap: $FlowFixMe),
       this._cacheManager ? this._cacheManager.getQueryWriter() : null,
     );
   }
@@ -641,13 +607,11 @@ class RelayStoreData {
   _handleChangedAndNewDataIDs(changeSet: ChangeSet): void {
     const updatedDataIDs = Object.keys(changeSet.updated);
     const createdDataIDs = Object.keys(changeSet.created);
-    const gc = this._garbageCollector;
     updatedDataIDs.forEach(id => this._changeEmitter.broadcastChangeForID(id));
     // Containers may be subscribed to "new" records in the case where they
     // were previously garbage collected or where the link was incrementally
     // loaded from cache prior to the linked record.
     createdDataIDs.forEach(id => {
-      gc && gc.register(id);
       this._changeEmitter.broadcastChangeForID(id);
     });
   }
@@ -657,7 +621,7 @@ class RelayStoreData {
       this._records,
       this._rootCallMap,
       false, // isOptimistic
-      (this._nodeRangeMap: $FixMe),
+      (this._nodeRangeMap: $FlowFixMe),
       this._cacheManager ? this._cacheManager.getMutationWriter() : null,
     );
   }
@@ -700,6 +664,10 @@ class RelayStoreData {
     };
   }
 
+  /* $FlowFixMe: This comment suppresses an error caught by Flow 0.59 which was
+   * not caught before. Most likely, this error is because an exported function
+   * parameter is missing an annotation. Without an annotation, these parameters
+   * are uncovered by Flow. */
   static fromJSON(obj): RelayStoreData {
     invariant(obj, 'RelayStoreData: JSON object is empty');
     const {

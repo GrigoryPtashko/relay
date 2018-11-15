@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @format
  * @emails oncall+relay
@@ -14,10 +12,12 @@
 
 const RelayModernTestUtils = require('RelayModernTestUtils');
 
-const fetchRelayModernQuery = require('fetchRelayModernQuery');
+const fetchRelayModernQuery = require('../fetchRelayModernQuery');
 
+const {
+  createOperationSelector,
+} = require('../../store/RelayModernOperationSelector');
 const {createMockEnvironment} = require('RelayModernMockEnvironment');
-const {createOperationSelector} = require('RelayModernOperationSelector');
 
 describe('fetchRelayModernQuery', () => {
   const {generateAndCompile} = RelayModernTestUtils;

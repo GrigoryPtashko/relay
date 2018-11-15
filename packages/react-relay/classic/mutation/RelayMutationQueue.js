@@ -1,12 +1,9 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayMutationQueue
  * @flow
  * @format
  */
@@ -14,53 +11,52 @@
 'use strict';
 
 const ErrorUtils = require('ErrorUtils');
-const QueryBuilder = require('QueryBuilder');
-const RelayMutationQuery = require('RelayMutationQuery');
-const RelayMutationRequest = require('RelayMutationRequest');
-const RelayMutationTransaction = require('RelayMutationTransaction');
-const RelayMutationTransactionStatus = require('RelayMutationTransactionStatus');
-const RelayOptimisticMutationUtils = require('RelayOptimisticMutationUtils');
-const RelayQuery = require('RelayQuery');
+const QueryBuilder = require('../query/QueryBuilder');
+const RelayMutationQuery = require('./RelayMutationQuery');
+const RelayMutationRequest = require('../network/RelayMutationRequest');
+const RelayMutationTransaction = require('./RelayMutationTransaction');
+const RelayMutationTransactionStatus = require('./RelayMutationTransactionStatus');
+const RelayOptimisticMutationUtils = require('./RelayOptimisticMutationUtils');
+const RelayQuery = require('../query/RelayQuery');
 
 const base62 = require('base62');
-const flattenRelayQuery = require('flattenRelayQuery');
-const fromGraphQL = require('fromGraphQL');
+const flattenRelayQuery = require('../traversal/flattenRelayQuery');
+const fromGraphQL = require('../query/fromGraphQL');
 const invariant = require('invariant');
 const nullthrows = require('nullthrows');
 const resolveImmediate = require('resolveImmediate');
 
-const {ConnectionInterface} = require('RelayRuntime');
+const {ConnectionInterface} = require('relay-runtime');
 
-import type {ConcreteMutation} from 'ConcreteQuery';
-import type {ClientMutationID} from 'RelayInternalTypes';
-import type RelayMutation from 'RelayMutation';
-import type {FileMap} from 'RelayMutation';
-import type RelayQueryTracker from 'RelayQueryTracker';
-import type RelayStoreData from 'RelayStoreData';
+import type {ConcreteMutation} from '../query/ConcreteQuery';
+import type RelayQueryTracker from '../store/RelayQueryTracker';
+import type RelayStoreData from '../store/RelayStoreData';
+import type {ClientMutationID} from '../tools/RelayInternalTypes';
 import type {
-  RelayMutationConfig,
   RelayMutationTransactionCommitCallbacks,
   RelayMutationTransactionCommitFailureCallback,
   RelayMutationTransactionCommitSuccessCallback,
-  Variables,
-} from 'RelayTypes';
+} from '../tools/RelayTypes';
+import type RelayMutation from './RelayMutation';
+import type {FileMap} from './RelayMutation';
+import type {DeclarativeMutationConfig, Variables} from 'relay-runtime';
 
 type CollisionQueueMap = {[key: string]: Array<PendingTransaction>};
 interface PendingTransaction {
-  error: ?Error,
-  getCallName(): string,
-  getCollisionKey(): ?string,
-  getConfigs(): Array<RelayMutationConfig>,
-  getFiles(): ?FileMap,
-  getOptimisticConfigs(): ?Array<RelayMutationConfig>,
-  getOptimisticQuery(storeData: RelayStoreData): ?RelayQuery.Mutation,
-  getOptimisticResponse(): ?Object,
-  getQuery(storeData: RelayStoreData): RelayQuery.Mutation,
-  id: ClientMutationID,
-  mutationTransaction: RelayMutationTransaction,
-  onFailure: ?RelayMutationTransactionCommitFailureCallback,
-  onSuccess: ?RelayMutationTransactionCommitSuccessCallback,
-  status: $Keys<typeof RelayMutationTransactionStatus>,
+  error: ?Error;
+  getCallName(): string;
+  getCollisionKey(): ?string;
+  getConfigs(): Array<DeclarativeMutationConfig>;
+  getFiles(): ?FileMap;
+  getOptimisticConfigs(): ?Array<DeclarativeMutationConfig>;
+  getOptimisticQuery(storeData: RelayStoreData): ?RelayQuery.Mutation;
+  getOptimisticResponse(): ?Object;
+  getQuery(storeData: RelayStoreData): RelayQuery.Mutation;
+  id: ClientMutationID;
+  mutationTransaction: RelayMutationTransaction;
+  onFailure: ?RelayMutationTransactionCommitFailureCallback;
+  onSuccess: ?RelayMutationTransactionCommitSuccessCallback;
+  status: $Keys<typeof RelayMutationTransactionStatus>;
 }
 type PendingTransactionMap = {
   [key: ClientMutationID]: PendingTransaction,
@@ -310,10 +306,17 @@ class RelayMutationQueue {
     );
     this._storeData.getNetworkLayer().sendMutation(request);
 
-    request.done(
-      result => this._handleCommitSuccess(transaction, result.response),
-      error => this._handleCommitFailure(transaction, error),
-    );
+    request
+      .getPromise()
+      .then(
+        result => this._handleCommitSuccess(transaction, result.response),
+        error => this._handleCommitFailure(transaction, error),
+      )
+      .catch(error => {
+        setTimeout(() => {
+          throw error;
+        }, 0);
+      });
   }
 
   _handleRollback(transaction: PendingTransaction): void {
@@ -392,8 +395,7 @@ class RelayPendingTransaction {
   // Lazily computed and memoized private properties
   _callName: string;
   _collisionKey: ?string;
-  // $FlowFixMe(>=0.34.0)
-  _configs: Array<{[key: string]: mixed}>;
+  _configs: Array<DeclarativeMutationConfig>;
   _error: ?Error;
   _fatQuery: RelayQuery.Fragment;
   _files: ?FileMap;
@@ -401,8 +403,7 @@ class RelayPendingTransaction {
   _mutationNode: ConcreteMutation;
   _onCommitFailureCallback: ?RelayMutationTransactionCommitFailureCallback;
   _onCommitSuccessCallback: ?RelayMutationTransactionCommitSuccessCallback;
-  // $FlowFixMe(>=0.34.0)
-  _optimisticConfigs: ?Array<{[key: string]: mixed}>;
+  _optimisticConfigs: ?Array<DeclarativeMutationConfig>;
   _optimisticQuery: ?RelayQuery.Mutation;
   _optimisticResponse: ?Object;
   _query: RelayQuery.Mutation;
@@ -432,7 +433,7 @@ class RelayPendingTransaction {
     return this._collisionKey;
   }
 
-  getConfigs(): Array<RelayMutationConfig> {
+  getConfigs(): Array<DeclarativeMutationConfig> {
     if (!this._configs) {
       this._configs = this.mutation.getConfigs();
     }
@@ -502,7 +503,7 @@ class RelayPendingTransaction {
     return this._mutationNode;
   }
 
-  getOptimisticConfigs(): ?Array<RelayMutationConfig> {
+  getOptimisticConfigs(): ?Array<DeclarativeMutationConfig> {
     if (this._optimisticConfigs === undefined) {
       this._optimisticConfigs = this.mutation.getOptimisticConfigs() || null;
     }
@@ -542,7 +543,7 @@ class RelayPendingTransaction {
         this._optimisticQuery = null;
       }
       if (__DEV__ && console.groupCollapsed && console.groupEnd) {
-        require('RelayMutationDebugPrinter').printOptimisticMutation(
+        require('./RelayMutationDebugPrinter').printOptimisticMutation(
           this._optimisticQuery,
           optimisticResponse,
         );
@@ -597,7 +598,7 @@ class RelayPendingTransaction {
         tracker,
       });
       if (__DEV__ && console.groupCollapsed && console.groupEnd) {
-        require('RelayMutationDebugPrinter').printMutation(this._query);
+        require('./RelayMutationDebugPrinter').printMutation(this._query);
         console.groupEnd();
       }
     }

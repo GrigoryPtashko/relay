@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails oncall+relay
  * @format
@@ -12,17 +10,17 @@
 
 'use strict';
 
-jest.mock('generateClientID').mock('warning');
+jest.mock('../../legacy/store/generateClientID').mock('warning');
 
 require('configureForRelayOSS');
 
-const GraphQLRange = require('GraphQLRange');
-const RelayClassic = require('RelayClassic');
-const RelayMetaRoute = require('RelayMetaRoute');
-const RelayQuery = require('RelayQuery');
+const GraphQLRange = require('../../legacy/store/GraphQLRange');
+const RelayClassic = require('../../RelayPublic');
+const RelayMetaRoute = require('../../route/RelayMetaRoute');
+const RelayQuery = require('../../query/RelayQuery');
 const RelayTestUtils = require('RelayTestUtils');
 
-const {ConnectionInterface} = require('RelayRuntime');
+const {ConnectionInterface} = require('relay-runtime');
 
 describe('writeRelayQueryPayload()', () => {
   let RelayRecordStore;
@@ -34,8 +32,8 @@ describe('writeRelayQueryPayload()', () => {
   beforeEach(() => {
     jest.resetModules();
 
-    RelayRecordStore = require('RelayRecordStore');
-    RelayRecordWriter = require('RelayRecordWriter');
+    RelayRecordStore = require('../../store/RelayRecordStore');
+    RelayRecordWriter = require('../../store/RelayRecordWriter');
 
     ({
       END_CURSOR,
@@ -104,10 +102,10 @@ describe('writeRelayQueryPayload()', () => {
       diffCalls: [],
       filterCalls: [],
       pageInfo: {
-        [END_CURSOR]: undefined,
+        [END_CURSOR]: null,
         [HAS_NEXT_PAGE]: false,
         [HAS_PREV_PAGE]: false,
-        [START_CURSOR]: undefined,
+        [START_CURSOR]: null,
       },
       requestedEdgeIDs: [],
       filteredEdges: [],

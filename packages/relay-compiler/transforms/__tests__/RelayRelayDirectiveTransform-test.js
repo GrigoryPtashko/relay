@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @format
  * @emails oncall+relay
@@ -17,32 +15,23 @@ const RelayParser = require('RelayParser');
 const RelayRelayDirectiveTransform = require('RelayRelayDirectiveTransform');
 const RelayTestSchema = require('RelayTestSchema');
 
-const getGoldenMatchers = require('getGoldenMatchers');
-const prettyStringify = require('prettyStringify');
-
 const {transformASTSchema} = require('ASTConvert');
+const {generateTestsFromFixtures} = require('RelayModernTestUtils');
 
 describe('RelayRelayDirectiveTransform', () => {
-  beforeEach(() => {
-    expect.extend(getGoldenMatchers(__filename));
-  });
-
-  it('matches expected output', () => {
-    expect('fixtures/relay-directive-transform').toMatchGolden(text => {
+  generateTestsFromFixtures(
+    `${__dirname}/fixtures/relay-directive-transform`,
+    text => {
       const schema = transformASTSchema(RelayTestSchema, [
         RelayRelayDirectiveTransform.SCHEMA_EXTENSION,
       ]);
       const ast = RelayParser.parse(schema, text);
-      const context = ast.reduce(
-        (ctx, node) => ctx.add(node),
-        new GraphQLCompilerContext(schema),
-      );
-      const nextContext = RelayRelayDirectiveTransform.transform(context);
-      const documents = [];
-      nextContext.documents().forEach(doc => {
-        documents.push(prettyStringify(doc));
-      });
-      return documents.join('\n');
-    });
-  });
+      return new GraphQLCompilerContext(RelayTestSchema, schema)
+        .addAll(ast)
+        .applyTransforms([RelayRelayDirectiveTransform.transform])
+        .documents()
+        .map(doc => JSON.stringify(doc, null, 2))
+        .join('\n');
+    },
+  );
 });

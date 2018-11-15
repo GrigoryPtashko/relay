@@ -1,12 +1,9 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule createClassicNode
  * @flow
  * @format
  */
@@ -21,14 +18,13 @@ const getFragmentNameParts = require('./getFragmentNameParts');
 const invariant = require('./invariant');
 
 import type {BabelState} from './BabelPluginRelay';
-import typeof BabelTypes from 'babel-types';
 import type {DefinitionNode} from 'graphql';
 
 /**
  * Relay Classic transforms to inline generated content.
  */
 function createClassicNode(
-  t: BabelTypes,
+  t: $FlowFixMe,
   path: Object,
   graphqlDefinition: DefinitionNode,
   state: BabelState,
@@ -138,10 +134,12 @@ function createClassicAST(t, definition) {
       let substitutionName = null;
       let isMasked = true;
 
+      // $FlowFixMe graphql 0.12.2
       if (directives.length === 0) {
         substitutionName = fragmentName;
       } else {
         // TODO: maybe add support when unmasked fragment has arguments.
+        // $FlowFixMe graphql 0.12.2
         const directive = directives[0];
         invariant(
           directives.length === 1,
@@ -151,6 +149,7 @@ function createClassicAST(t, definition) {
         switch (directive.name.value) {
           case 'arguments':
             const fragmentArgumentsObject = {};
+            // $FlowFixMe graphql 0.12.2
             directive.arguments.forEach(argNode => {
               const argValue = argNode.value;
               if (argValue.kind === 'Variable') {
@@ -166,13 +165,17 @@ function createClassicAST(t, definition) {
           case 'relay':
             const relayArguments = directive.arguments;
             invariant(
+              // $FlowFixMe graphql 0.12.2
               relayArguments.length === 1 &&
+                // $FlowFixMe graphql 0.12.2
                 relayArguments[0].name.value === 'mask',
               'BabelPluginRelay: Expected `@relay` directive to only have `mask` argument in ' +
                 'compat mode, but get %s',
+              // $FlowFixMe graphql 0.12.2
               relayArguments[0].name.value,
             );
             substitutionName = fragmentName;
+            // $FlowFixMe graphql 0.12.2
             isMasked = relayArguments[0].value.value !== false;
             break;
           default:
@@ -248,8 +251,9 @@ function createOperationArguments(t, variableDefinitions) {
 function createFragmentArguments(t, argumentDefinitions, variables) {
   const concreteDefinitions = [];
   Object.keys(variables).forEach(name => {
-    const definition = (argumentDefinitions || [])
-      .find(arg => arg.name.value === name);
+    const definition = (argumentDefinitions || []).find(
+      arg => arg.name.value === name,
+    );
     if (definition) {
       const defaultValueField = definition.value.fields.find(
         field => field.name.value === 'defaultValue',
@@ -425,7 +429,9 @@ function createSubstitutionsForFragmentSpreads(t, path, fragments) {
       invariant(
         path.scope.hasBinding(module) || path.scope.hasBinding(propName),
         `BabelPluginRelay: Please make sure module '${module}' is imported and not renamed or the
-        fragment '${fragment.name}' is defined and bound to local variable '${propName}'. `,
+        fragment '${
+          fragment.name
+        }' is defined and bound to local variable '${propName}'. `,
       );
       const fragmentProp = path.scope.hasBinding(propName)
         ? t.memberExpression(t.identifier(propName), t.identifier(propName))
@@ -446,7 +452,7 @@ function createSubstitutionsForFragmentSpreads(t, path, fragments) {
               t.identifier(RELAY_QL_GENERATED),
               t.identifier('__getClassicFragment'),
             ),
-            [fragmentProp],
+            [fragmentProp, t.booleanLiteral(true)],
           ),
           // Hack to extract 'ConcreteFragment' from 'ConcreteFragmentDefinition'
           t.identifier('node'),

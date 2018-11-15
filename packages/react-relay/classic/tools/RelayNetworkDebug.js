@@ -1,27 +1,24 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayNetworkDebug
  * @flow
  * @format
  */
 
 'use strict';
 
-const Relay = require('RelayPublic');
+const Relay = require('../RelayPublic');
 
 const performanceNow = require('performanceNow');
 const xhrSimpleDataSerializer = require('xhrSimpleDataSerializer');
 
-import type RelayEnvironment from 'RelayEnvironment';
-import type RelayMutationRequest from 'RelayMutationRequest';
-import type RelayQueryRequest from 'RelayQueryRequest';
-import type {ChangeSubscription} from 'RelayTypes';
+import type RelayMutationRequest from '../network/RelayMutationRequest';
+import type RelayQueryRequest from '../network/RelayQueryRequest';
+import type RelayEnvironment from '../store/RelayEnvironment';
+import type {ChangeSubscription} from './RelayTypes';
 
 export type RelayNetworkDebuggable = {
   name: string,
@@ -148,7 +145,7 @@ function formatSize(bytes: number): string {
   while (bytes >= Math.pow(1024, i + 1) && i < ALL_UNITS.length) {
     i++;
   }
-  const value = sign * bytes * 1.0 / Math.pow(1024, i);
+  const value = (sign * bytes * 1.0) / Math.pow(1024, i);
   return Number(value.toFixed(2)) + ALL_UNITS[i];
 }
 

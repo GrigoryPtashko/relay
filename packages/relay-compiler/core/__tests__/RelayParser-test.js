@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @format
  * @emails oncall+relay
@@ -16,21 +14,21 @@ require('configureForRelayOSS');
 
 const RelayParser = require('RelayParser');
 const RelayTestSchema = require('RelayTestSchema');
-const getGoldenMatchers = require('getGoldenMatchers');
-const prettyStringify = require('prettyStringify');
+const {generateTestsFromFixtures} = require('RelayModernTestUtils');
+const RelayMatchTransform = require('../../transforms/RelayMatchTransform');
+const {ASTConvert} = require('graphql-compiler');
 
 describe('RelayParser', () => {
-  beforeEach(() => {
-    expect.extend(getGoldenMatchers(__filename));
-  });
+  const schema = ASTConvert.transformASTSchema(RelayTestSchema, [
+    RelayMatchTransform.SCHEMA_EXTENSION,
+  ]);
 
-  it('matches expected output', () => {
-    expect('fixtures/parser').toMatchGolden(text => {
-      try {
-        return prettyStringify(RelayParser.parse(RelayTestSchema, text));
-      } catch (e) {
-        return 'ERROR:\n' + e;
-      }
-    });
+  generateTestsFromFixtures(`${__dirname}/fixtures/parser`, text => {
+    try {
+      const ir = RelayParser.parse(schema, text);
+      return JSON.stringify(ir, null, 2);
+    } catch (e) {
+      return 'ERROR:\n' + e;
+    }
   });
 });

@@ -1,50 +1,52 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayDataLoader
- * @flow
+ * @flow strict-local
  * @format
+ * @emails oncall+relay
  */
 
 'use strict';
 
-const RelayConcreteNode = require('RelayConcreteNode');
-const RelayRecordSourceMutator = require('RelayRecordSourceMutator');
-const RelayStoreUtils = require('RelayStoreUtils');
+const RelayConcreteNode = require('../util/RelayConcreteNode');
+const RelayRecordSourceMutator = require('../mutations/RelayRecordSourceMutator');
+const RelayStoreUtils = require('./RelayStoreUtils');
 
-const cloneRelayHandleSourceField = require('cloneRelayHandleSourceField');
+const cloneRelayHandleSourceField = require('./cloneRelayHandleSourceField');
 const invariant = require('invariant');
 
-const {EXISTENT, UNKNOWN} = require('RelayRecordState');
+const {EXISTENT, UNKNOWN} = require('./RelayRecordState');
 
-import type {Record} from 'RelayCombinedEnvironmentTypes';
 import type {
   ConcreteLinkedField,
+  ConcreteMatchField,
   ConcreteNode,
   ConcreteScalarField,
   ConcreteSelection,
   ConcreteField,
-} from 'RelayConcreteNode';
-import type {DataID} from 'RelayInternalTypes';
+} from '../util/RelayConcreteNode';
+import type {DataID, Variables} from '../util/RelayRuntimeTypes';
 import type {
+  FragmentLoader,
   MissingFieldHandler,
   MutableRecordSource,
   RecordSource,
   Selector,
-} from 'RelayStoreTypes';
-import type {Variables} from 'RelayTypes';
+} from './RelayStoreTypes';
+import type {Record} from 'react-relay/classic/environment/RelayCombinedEnvironmentTypes';
 
 const {
   CONDITION,
+  FRAGMENT_SPREAD,
   INLINE_FRAGMENT,
   LINKED_FIELD,
   LINKED_HANDLE,
+  MATCH_FIELD,
   SCALAR_FIELD,
+  SCALAR_HANDLE,
 } = RelayConcreteNode;
 const {getStorageKey, getArgumentValues} = RelayStoreUtils;
 
@@ -62,10 +64,17 @@ function check(
   source: RecordSource,
   target: MutableRecordSource,
   selector: Selector,
-  handlers: Array<MissingFieldHandler>,
+  handlers: $ReadOnlyArray<MissingFieldHandler>,
+  fragmentLoader?: ?FragmentLoader,
 ): boolean {
   const {dataID, node, variables} = selector;
-  const loader = new RelayDataLoader(source, target, variables, handlers);
+  const loader = new RelayDataLoader(
+    source,
+    target,
+    variables,
+    handlers,
+    fragmentLoader,
+  );
   return loader.check(node, dataID);
 }
 
@@ -74,23 +83,26 @@ function check(
  */
 class RelayDataLoader {
   _done: boolean;
-  _source: RecordSource;
+  _fragmentLoader: FragmentLoader | null;
+  _handlers: $ReadOnlyArray<MissingFieldHandler>;
   _mutator: RelayRecordSourceMutator;
-  _variables: Variables;
   _recordWasMissing: boolean;
-  _handlers: Array<MissingFieldHandler>;
+  _source: RecordSource;
+  _variables: Variables;
 
   constructor(
     source: RecordSource,
     target: MutableRecordSource,
     variables: Variables,
-    handlers: Array<MissingFieldHandler>,
+    handlers: $ReadOnlyArray<MissingFieldHandler>,
+    fragmentLoader: ?FragmentLoader,
   ) {
-    this._source = source;
-    this._variables = variables;
-    this._recordWasMissing = false;
+    this._fragmentLoader = fragmentLoader ?? null;
     this._handlers = handlers;
     this._mutator = new RelayRecordSourceMutator(source, target);
+    this._recordWasMissing = false;
+    this._source = source;
+    this._variables = variables;
   }
 
   check(node: ConcreteNode, dataID: DataID): boolean {
@@ -228,15 +240,57 @@ class RelayDataLoader {
             this._prepareLink(handleField, dataID);
           }
           break;
-        default:
+        case MATCH_FIELD:
+          this._prepareMatch(selection, dataID);
+          break;
+        case SCALAR_HANDLE:
+        case FRAGMENT_SPREAD:
           invariant(
-            selection.kind === SCALAR_FIELD,
+            false,
+            'RelayAsyncLoader(): Unexpected ast kind `%s`.',
+            selection.kind,
+          );
+          // $FlowExpectedError - we need the break; for OSS linter
+          break;
+        default:
+          (selection: empty);
+          invariant(
+            false,
             'RelayAsyncLoader(): Unexpected ast kind `%s`.',
             selection.kind,
           );
       }
       return !this._done;
     });
+  }
+
+  _prepareMatch(field: ConcreteMatchField, dataID: DataID): void {
+    const storageKey = getStorageKey(field, this._variables);
+    const linkedID = this._mutator.getLinkedRecordID(dataID, storageKey);
+
+    if (linkedID === undefined) {
+      this._handleMissing();
+    } else if (linkedID !== null) {
+      const typeName = this._mutator.getType(linkedID);
+      const match = typeName != null ? field.matchesByType[typeName] : null;
+      if (match != null) {
+        const fragmentLoader = this._fragmentLoader;
+        invariant(
+          fragmentLoader !== null,
+          'RelayDataLoader: Expected a fragmentLoader to be configured when using `@match`.',
+        );
+        const fragment = fragmentLoader.get(match.selection.name);
+        if (fragment != null) {
+          this._traverse(fragment, linkedID);
+        } else {
+          // If the fragment is not available, we assume that the data cannot have been
+          // processed yet and must therefore be missing.
+          this._handleMissing();
+        }
+      } else {
+        // TODO: warn: store is corrupt: the field should be null if the typename did not match
+      }
+    }
   }
 
   _prepareScalar(field: ConcreteScalarField, dataID: DataID): void {

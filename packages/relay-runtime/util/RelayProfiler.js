@@ -1,12 +1,9 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayProfiler
  * @flow
  * @format
  */
@@ -17,7 +14,7 @@ const emptyFunction = require('emptyFunction');
 const removeFromArray = require('removeFromArray');
 
 type Handler = (name: string, callback: () => void) => void;
-type ProfileHandler = (name: string, state?: any) => () => void;
+type ProfileHandler = (name: string, state?: any) => (error?: Error) => void;
 
 const aggregateHandlersByName: {[name: string]: Array<Handler>} = {
   '*': [],
@@ -89,7 +86,9 @@ const RelayProfiler = {
   ): void {
     for (const key in names) {
       if (names.hasOwnProperty(key)) {
-        object[key] = RelayProfiler.instrument(names[key], object[key]);
+        if (typeof object[key] === 'function') {
+          object[key] = RelayProfiler.instrument(names[key], object[key]);
+        }
       }
     }
   },
@@ -221,7 +220,7 @@ const RelayProfiler = {
    * Arbitrary state can also be passed into `profile` as a second argument. The
    * attached profile handlers will receive this as the second argument.
    */
-  profile(name: string, state?: any): {stop: () => void} {
+  profile(name: string, state?: any): {stop: (error?: Error) => void} {
     const hasCatchAllHandlers = profileHandlersByName['*'].length > 0;
     const hasNamedHandlers = profileHandlersByName.hasOwnProperty(name);
     if (hasNamedHandlers || hasCatchAllHandlers) {
@@ -239,9 +238,9 @@ const RelayProfiler = {
         stopHandlers.unshift(stopHandler);
       }
       return {
-        stop(): void {
+        stop(error?: Error): void {
           if (stopHandlers) {
-            stopHandlers.forEach(stopHandler => stopHandler());
+            stopHandlers.forEach(stopHandler => stopHandler(error));
           }
         },
       };

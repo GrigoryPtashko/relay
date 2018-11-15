@@ -1,20 +1,17 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayMutationDebugPrinter
  * @flow
  * @format
  */
 
 'use strict';
-const printRelayQuery = require('printRelayQuery');
+const printRelayQuery = require('../traversal/printRelayQuery');
 
-import type RelayQuery from 'RelayQuery';
+import type RelayQuery from '../query/RelayQuery';
 
 /**
  * @internal
@@ -23,7 +20,7 @@ import type RelayQuery from 'RelayQuery';
  */
 const RelayMutationDebugPrinter = {
   printOptimisticMutation(query: ?RelayQuery.Node, response: ?Object): void {
-    /* eslint-disable no-console-disallow */
+    /* eslint-disable no-console */
     if (!console.groupCollapsed || !console.groupEnd) {
       return;
     }
@@ -32,11 +29,11 @@ const RelayMutationDebugPrinter = {
     console.groupCollapsed('Optimistic Response');
     console.log(response);
     console.groupEnd();
-    /* eslint-enable no-console-disallow */
+    /* eslint-enable no-console */
   },
 
   printMutation(query: ?RelayQuery.Node, name?: string): void {
-    /* eslint-disable no-console-disallow */
+    /* eslint-disable no-console */
     if (!console.groupCollapsed || !console.groupEnd) {
       return;
     }
@@ -50,7 +47,7 @@ const RelayMutationDebugPrinter = {
     console.groupCollapsed(name + ' Query');
     console.log(printedQuery ? printedQuery.text : '');
     console.groupEnd();
-    /* eslint-enable no-console-disallow */
+    /* eslint-enable no-console */
   },
 };
 

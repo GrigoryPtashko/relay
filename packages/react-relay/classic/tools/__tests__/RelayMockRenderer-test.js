@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails oncall+relay
  * @format
@@ -15,24 +13,20 @@
 jest.mock('ReactDOM', () => ({}));
 
 const React = require('React');
-const RelayClassic = require('RelayClassic');
+const Relay = require('react-relay/classic/RelayPublic');
 const ReactTestRenderer = require('ReactTestRenderer');
-const RelayMockRenderer = require('RelayMockRenderer');
+const RelayMockRenderer = require('../RelayMockRenderer');
 
 describe('RelayMockRenderer', () => {
   it('renders a container with mock data', () => {
     class Component extends React.Component {
       render() {
-        return (
-          <h1>
-            {this.props.viewer.actor.name}
-          </h1>
-        );
+        return <h1>{this.props.viewer.actor.name}</h1>;
       }
     }
-    const Container = RelayClassic.createContainer(Component, {
+    const Container = Relay.createContainer(Component, {
       fragments: {
-        viewer: () => RelayClassic.QL`
+        viewer: () => Relay.QL`
           fragment on Viewer {
             actor {
               name

@@ -1,29 +1,24 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule GraphQLStoreQueryResolver
  * @flow
  * @format
  */
 
 'use strict';
 
-const RelayProfiler = require('RelayProfiler');
-
-const readRelayQueryData = require('readRelayQueryData');
-const recycleNodesInto = require('recycleNodesInto');
+const readRelayQueryData = require('../../store/readRelayQueryData');
 const warning = require('warning');
 
-import type RelayGarbageCollector from 'RelayGarbageCollector';
-import type {DataID} from 'RelayInternalTypes';
-import type RelayQuery from 'RelayQuery';
-import type RelayStoreData from 'RelayStoreData';
-import type {ChangeSubscription, StoreReaderData} from 'RelayTypes';
+const {recycleNodesInto, RelayProfiler} = require('relay-runtime');
+
+import type RelayQuery from '../../query/RelayQuery';
+import type RelayStoreData from '../../store/RelayStoreData';
+import type {ChangeSubscription, StoreReaderData} from '../../tools/RelayTypes';
+import type {DataID} from 'relay-runtime';
 
 type DataIDSet = {[dataID: DataID]: any};
 
@@ -40,7 +35,8 @@ class GraphQLStoreQueryResolver {
   _fragment: RelayQuery.Fragment;
   _resolver: ?(
     | GraphQLStorePluralQueryResolver
-    | GraphQLStoreSingleQueryResolver);
+    | GraphQLStoreSingleQueryResolver
+  );
   _storeData: RelayStoreData;
 
   constructor(
@@ -210,7 +206,6 @@ class GraphQLStorePluralQueryResolver {
 class GraphQLStoreSingleQueryResolver {
   _callback: Function;
   _fragment: ?RelayQuery.Fragment;
-  _garbageCollector: ?RelayGarbageCollector;
   _hasDataChanged: boolean;
   _result: ?StoreReaderData;
   _resultID: ?DataID;
@@ -221,7 +216,6 @@ class GraphQLStoreSingleQueryResolver {
   constructor(storeData: RelayStoreData, callback: Function) {
     this.dispose();
     this._callback = callback;
-    this._garbageCollector = storeData.getGarbageCollector();
     this._storeData = storeData;
     this._subscribedIDs = {};
   }
@@ -235,7 +229,6 @@ class GraphQLStoreSingleQueryResolver {
     this._result = null;
     this._resultID = null;
     this._subscription = null;
-    this._updateGarbageCollectorSubscriptionCount({});
     this._subscribedIDs = {};
   }
 
@@ -289,7 +282,6 @@ class GraphQLStoreSingleQueryResolver {
           Object.keys(subscribedIDs),
           this._handleChange.bind(this),
         );
-        this._updateGarbageCollectorSubscriptionCount(subscribedIDs);
         this._subscribedIDs = subscribedIDs;
       }
       this._resultID = nextID;
@@ -328,33 +320,6 @@ class GraphQLStoreSingleQueryResolver {
       dataID,
     );
     return [data, dataIDs];
-  }
-
-  /**
-   * Updates bookkeeping about the number of subscribers on each record.
-   */
-  _updateGarbageCollectorSubscriptionCount(nextDataIDs: {
-    [dataID: DataID]: boolean,
-  }): void {
-    if (this._garbageCollector) {
-      const garbageCollector = this._garbageCollector;
-      const rangeData = this._storeData.getRangeData();
-      const prevDataIDs = this._subscribedIDs;
-
-      // Note: the same canonical ID may appear in both removed and added: in
-      // that case, it would have been:
-      // - previous step: canonical ID ref count was incremented
-      // - current step: canonical ID is incremented *and* decremented
-      // Note that the net ref count change is +1.
-      Object.keys(nextDataIDs).forEach(id => {
-        id = rangeData.getCanonicalClientID(id);
-        garbageCollector.incrementReferenceCount(id);
-      });
-      Object.keys(prevDataIDs).forEach(id => {
-        id = rangeData.getCanonicalClientID(id);
-        garbageCollector.decrementReferenceCount(id);
-      });
-    }
   }
 }
 

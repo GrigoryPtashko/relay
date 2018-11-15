@@ -1,18 +1,37 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayStoreTypes
  * @flow
  * @format
  */
 
 'use strict';
 
+import type {
+  GraphQLResponse,
+  PayloadError,
+  UploadableMap,
+} from '../network/RelayNetworkTypes';
+import type {PayloadData} from '../network/RelayNetworkTypes';
+import type RelayObservable from '../network/RelayObservable';
+import type {GraphQLTaggedNode} from '../query/RelayModernGraphQLTag';
+import type {
+  ConcreteScalarField,
+  ConcreteLinkedField,
+  ConcreteFragment,
+  ConcreteSelectableNode,
+  RequestNode,
+} from '../util/RelayConcreteNode';
+import type {
+  CacheConfig,
+  DataID,
+  Disposable,
+  Variables,
+} from '../util/RelayRuntimeTypes';
+import type {RecordState} from './RelayRecordState';
 import type {
   CEnvironment,
   CFragmentMap,
@@ -21,33 +40,24 @@ import type {
   CSelector,
   CSnapshot,
   CUnstableEnvironmentCore,
-  Disposable,
   Record,
-} from 'RelayCombinedEnvironmentTypes';
-import type {
-  ConcreteBatch,
-  ConcreteScalarField,
-  ConcreteLinkedField,
-  ConcreteFragment,
-  ConcreteSelectableNode,
-} from 'RelayConcreteNode';
-import type {DataID} from 'RelayInternalTypes';
-import type {GraphQLTaggedNode} from 'RelayModernGraphQLTag';
-import type {PayloadData} from 'RelayNetworkTypes';
-import type {PayloadError, UploadableMap} from 'RelayNetworkTypes';
-import type RelayObservable from 'RelayObservable';
-import type {RecordState} from 'RelayRecordState';
-import type {Variables} from 'RelayTypes';
+} from 'react-relay/classic/environment/RelayCombinedEnvironmentTypes';
+
+export type {
+  SelectorData,
+} from 'react-relay/classic/environment/RelayCombinedEnvironmentTypes';
+
+export opaque type FragmentReference = empty;
 
 type TEnvironment = Environment;
 type TFragment = ConcreteFragment;
 type TGraphQLTaggedNode = GraphQLTaggedNode;
 type TNode = ConcreteSelectableNode;
-type TOperation = ConcreteBatch;
-type TPayload = RelayResponsePayload;
+type TPayload = GraphQLResponse;
+type TRequest = RequestNode;
 
 export type FragmentMap = CFragmentMap<TFragment>;
-export type OperationSelector = COperationSelector<TNode, TOperation>;
+export type OperationSelector = COperationSelector<TNode, TRequest>;
 export type RelayContext = CRelayContext<TEnvironment>;
 export type Selector = CSelector<TNode>;
 export type Snapshot = CSnapshot<TNode>;
@@ -56,32 +66,32 @@ export type UnstableEnvironmentCore = CUnstableEnvironmentCore<
   TFragment,
   TGraphQLTaggedNode,
   TNode,
-  TOperation,
+  TRequest,
 >;
 
 /**
  * A read-only interface for accessing cached graph data.
  */
 export interface RecordSource {
-  get(dataID: DataID): ?Record,
-  getRecordIDs(): Array<DataID>,
-  getStatus(dataID: DataID): RecordState,
-  has(dataID: DataID): boolean,
+  get(dataID: DataID): ?Record;
+  getRecordIDs(): Array<DataID>;
+  getStatus(dataID: DataID): RecordState;
+  has(dataID: DataID): boolean;
   load(
     dataID: DataID,
     callback: (error: ?Error, record: ?Record) => void,
-  ): void,
-  size(): number,
+  ): void;
+  size(): number;
 }
 
 /**
  * A read/write interface for accessing and updating graph data.
  */
 export interface MutableRecordSource extends RecordSource {
-  clear(): void,
-  delete(dataID: DataID): void,
-  remove(dataID: DataID): void,
-  set(dataID: DataID, record: Record): void,
+  clear(): void;
+  delete(dataID: DataID): void;
+  remove(dataID: DataID): void;
+  set(dataID: DataID, record: Record): void;
 }
 
 /**
@@ -92,38 +102,38 @@ export interface Store {
   /**
    * Get a read-only view of the store's internal RecordSource.
    */
-  getSource(): RecordSource,
+  getSource(): RecordSource;
 
   /**
    * Determine if the selector can be resolved with data in the store (i.e. no
    * fields are missing).
    */
-  check(selector: Selector): boolean,
+  check(selector: Selector): boolean;
 
   /**
    * Read the results of a selector from in-memory records in the store.
    */
-  lookup(selector: Selector): Snapshot,
+  lookup(selector: Selector): Snapshot;
 
   /**
    * Notify subscribers (see `subscribe`) of any data that was published
    * (`publish()`) since the last time `notify` was called.
    */
-  notify(): void,
+  notify(): void;
 
   /**
    * Publish new information (e.g. from the network) to the store, updating its
    * internal record source. Subscribers are not immediately notified - this
    * occurs when `notify()` is called.
    */
-  publish(source: RecordSource): void,
+  publish(source: RecordSource): void;
 
   /**
    * Ensure that all the records necessary to fulfill the given selector are
    * retained in-memory. The records will not be eligible for garbage collection
    * until the returned reference is disposed.
    */
-  retain(selector: Selector): Disposable,
+  retain(selector: Selector): Disposable;
 
   /**
    * Subscribe to changes to the results of a selector. The callback is called
@@ -133,8 +143,20 @@ export interface Store {
   subscribe(
     snapshot: Snapshot,
     callback: (snapshot: Snapshot) => void,
-  ): Disposable,
+  ): Disposable;
+
+  /**
+   * The method should disable garbage collection until
+   * the returned reference is disposed.
+   */
+  holdGC(): Disposable;
 }
+
+/**
+ * A type that accepts a callback and schedules it to run at some future time.
+ * By convention, implementations should not execute the callback immediately.
+ */
+export type Scheduler = (() => void) => void;
 
 /**
  * An interface for imperatively getting/setting properties of a `Record`. This interface
@@ -143,28 +165,28 @@ export interface Store {
  * the modifications.
  */
 export interface RecordProxy {
-  copyFieldsFrom(source: RecordProxy): void,
-  getDataID(): DataID,
-  getLinkedRecord(name: string, args?: ?Variables): ?RecordProxy,
-  getLinkedRecords(name: string, args?: ?Variables): ?Array<?RecordProxy>,
+  copyFieldsFrom(source: RecordProxy): void;
+  getDataID(): DataID;
+  getLinkedRecord(name: string, args?: ?Variables): ?RecordProxy;
+  getLinkedRecords(name: string, args?: ?Variables): ?Array<?RecordProxy>;
   getOrCreateLinkedRecord(
     name: string,
     typeName: string,
     args?: ?Variables,
-  ): RecordProxy,
-  getType(): string,
-  getValue(name: string, args?: ?Variables): mixed,
+  ): RecordProxy;
+  getType(): string;
+  getValue(name: string, args?: ?Variables): mixed;
   setLinkedRecord(
     record: RecordProxy,
     name: string,
     args?: ?Variables,
-  ): RecordProxy,
+  ): RecordProxy;
   setLinkedRecords(
     records: Array<?RecordProxy>,
     name: string,
     args?: ?Variables,
-  ): RecordProxy,
-  setValue(value: mixed, name: string, args?: ?Variables): RecordProxy,
+  ): RecordProxy;
+  setValue(value: mixed, name: string, args?: ?Variables): RecordProxy;
 }
 
 /**
@@ -174,10 +196,10 @@ export interface RecordProxy {
  * the modifications.
  */
 export interface RecordSourceProxy {
-  create(dataID: DataID, typeName: string): RecordProxy,
-  delete(dataID: DataID): void,
-  get(dataID: DataID): ?RecordProxy,
-  getRoot(): RecordProxy,
+  create(dataID: DataID, typeName: string): RecordProxy;
+  delete(dataID: DataID): void;
+  get(dataID: DataID): ?RecordProxy;
+  getRoot(): RecordProxy;
 }
 
 /**
@@ -185,12 +207,12 @@ export interface RecordSourceProxy {
  * fields of a Selector.
  */
 export interface RecordSourceSelectorProxy {
-  create(dataID: DataID, typeName: string): RecordProxy,
-  delete(dataID: DataID): void,
-  get(dataID: DataID): ?RecordProxy,
-  getRoot(): RecordProxy,
-  getRootField(fieldName: string): ?RecordProxy,
-  getPluralRootField(fieldName: string): ?Array<?RecordProxy>,
+  create(dataID: DataID, typeName: string): RecordProxy;
+  delete(dataID: DataID): void;
+  get(dataID: DataID): ?RecordProxy;
+  getRoot(): RecordProxy;
+  getRootField(fieldName: string): ?RecordProxy;
+  getPluralRootField(fieldName: string): ?Array<?RecordProxy>;
 }
 
 /**
@@ -203,31 +225,21 @@ export interface Environment
     TFragment,
     TGraphQLTaggedNode,
     TNode,
-    TOperation,
+    TRequest,
     TPayload,
   > {
   /**
    * Apply an optimistic update to the environment. The mutation can be reverted
    * by calling `dispose()` on the returned value.
    */
-  applyUpdate(optimisticUpdate: OptimisticUpdate): Disposable,
-
-  /**
-   * Determine if the selector can be resolved with data in the store (i.e. no
-   * fields are missing).
-   *
-   * Note that this operation effectively "executes" the selector against the
-   * cache and therefore takes time proportional to the size/complexity of the
-   * selector.
-   */
-  check(selector: Selector): boolean,
+  applyUpdate(optimisticUpdate: OptimisticUpdate): Disposable;
 
   /**
    * Commit an updater to the environment. This mutation cannot be reverted and
    * should therefore not be used for optimistic updates. This is mainly
    * intended for updating fields from client schema extensions.
    */
-  commitUpdate(updater: StoreUpdater): void,
+  commitUpdate(updater: StoreUpdater): void;
 
   /**
    * Commit a payload to the environment using the given operation selector.
@@ -235,15 +247,15 @@ export interface Environment
   commitPayload(
     operationSelector: OperationSelector,
     payload: PayloadData,
-  ): void,
+  ): void;
 
   /**
    * Get the environment's internal Store.
    */
-  getStore(): Store,
+  getStore(): Store;
 
   /**
-   * Returns an Observable of RelayResponsePayload resulting from executing the
+   * Returns an Observable of GraphQLResponse resulting from executing the
    * provided Mutation operation, the result of which is then normalized and
    * committed to the publish queue along with an optional optimistic response
    * or updater.
@@ -258,20 +270,7 @@ export interface Environment
     optimisticResponse?: ?Object,
     updater?: ?SelectorStoreUpdater,
     uploadables?: ?UploadableMap,
-  |}): RelayObservable<RelayResponsePayload>,
-
-  /**
-   * Checks if the records required to fulfill the given `selector` are in
-   * the. Missing fields use the provided `handlers` to attempt to provide
-   * substitutes. After traversal, the changes suggested by the `handlers` are
-   * published back to the store.
-   *
-   * returns `true` if all records exist and all fields are fetched, false otherwise.
-   */
-  checkSelectorAndUpdateStore(
-    selector: Selector,
-    handlers: Array<MissingFieldHandler>,
-  ): boolean,
+  |}): RelayObservable<GraphQLResponse>;
 }
 
 /**
@@ -282,6 +281,16 @@ export type FragmentPointer = {
   __id: DataID,
   __fragments: {[fragmentName: string]: Variables},
 };
+
+/**
+ * The results of reading a field that was marked with a @match directive
+ */
+export type MatchPointer = {|
+  __id: DataID,
+  __fragments: {[fragmentName: string]: Variables},
+  __fragmentPropName: string,
+  __module: string,
+|};
 
 /**
  * A callback for resolving a Selector from a source.
@@ -324,6 +333,44 @@ export type HandleFieldPayload = $Exact<{
 }>;
 
 /**
+ * A payload that represents data necessary to process the results of a `@match`
+ * directive:
+ * - data: The GraphQL response value for the @match field.
+ * - dataID: The ID of the store object linked to by the @match field.
+ * - fragmentName: The name of the fragment (module) with which to normalize
+ *   the data.
+ * - variables: Query variables.
+ * - typeName: the type that matched.
+ *
+ * The dataID, variables, and fragmentName can be used to create a Selector
+ * which can in turn be used to normalize and publish the data. The dataID and
+ * typeName can also be used to construct a root record for normalization.
+ */
+export type MatchFieldPayload = {|
+  data: PayloadData,
+  dataID: DataID,
+  fragmentName: string,
+  typeName: string,
+  variables: Variables,
+|};
+
+/**
+ * A user-supplied object to load a generated fragment ASTs by (module) name.
+ */
+export type FragmentLoader = {|
+  /**
+   * Synchronously load a fragment, returning either the fragment or null if it
+   * cannot be resolved synchronously.
+   */
+  get(fragmentModuleName: string): ?ConcreteFragment,
+
+  /**
+   * Asynchronously load a fragment.
+   */
+  load(fragmentModuleName: string): Promise<?ConcreteFragment>,
+|};
+
+/**
  * A function that receives a proxy over the store and may trigger side-effects
  * (indirectly) by calling `set*` methods on the store or its record proxies.
  */
@@ -342,9 +389,11 @@ export type SelectorStoreUpdater = (
 ) => void;
 
 /**
-  * A set of configs that can be used to apply an optimistic update into the
-  * store.
-  */
+ * A set of configs that can be used to apply an optimistic update into the
+ * store.
+ * TODO: we should probably only expose `storeUpdater` and `source` to the
+ * publish queue.
+ */
 export type OptimisticUpdate =
   | {|
       storeUpdater: StoreUpdater,
@@ -353,6 +402,10 @@ export type OptimisticUpdate =
       selectorStoreUpdater: ?SelectorStoreUpdater,
       operation: OperationSelector,
       response: ?Object,
+    |}
+  | {|
+      source: RecordSource,
+      fieldPayloads?: ?Array<HandleFieldPayload>,
     |};
 
 /**
@@ -390,6 +443,7 @@ export type MissingFieldHandler =
  */
 export type RelayResponsePayload = {|
   fieldPayloads?: ?Array<HandleFieldPayload>,
+  matchPayloads?: ?Array<MatchFieldPayload>,
   source: MutableRecordSource,
   errors: ?Array<PayloadError>,
 |};

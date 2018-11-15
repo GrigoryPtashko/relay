@@ -1,12 +1,9 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayModernSelector
  * @flow
  * @format
  */
@@ -17,13 +14,12 @@ const areEqual = require('areEqual');
 const invariant = require('invariant');
 const warning = require('warning');
 
-const {getFragmentVariables} = require('RelayConcreteVariables');
-const {FRAGMENTS_KEY, ID_KEY} = require('RelayStoreUtils');
+const {getFragmentVariables} = require('./RelayConcreteVariables');
+const {FRAGMENTS_KEY, ID_KEY} = require('./RelayStoreUtils');
 
-import type {ConcreteFragment} from 'RelayConcreteNode';
-import type {DataID} from 'RelayInternalTypes';
-import type {Selector} from 'RelayStoreTypes';
-import type {Variables} from 'RelayTypes';
+import type {ConcreteFragment} from '../util/RelayConcreteNode';
+import type {DataID, Variables} from '../util/RelayRuntimeTypes';
+import type {Selector} from './RelayStoreTypes';
 
 /**
  * @public

@@ -1,24 +1,21 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayModernOperationSelector
- * @flow
+ * @flow strict-local
  * @format
  */
 
 'use strict';
 
-const {getOperationVariables} = require('RelayConcreteVariables');
-const {ROOT_ID} = require('RelayStoreUtils');
+const {getOperationVariables} = require('./RelayConcreteVariables');
+const {ROOT_ID} = require('./RelayStoreUtils');
 
-import type {ConcreteBatch} from 'RelayConcreteNode';
-import type {OperationSelector} from 'RelayStoreTypes';
-import type {Variables} from 'RelayTypes';
+import type {ConcreteRequest} from '../util/RelayConcreteNode';
+import type {Variables} from '../util/RelayRuntimeTypes';
+import type {OperationSelector} from './RelayStoreTypes';
 
 /**
  * Creates an instance of the `OperationSelector` type defined in
@@ -27,21 +24,22 @@ import type {Variables} from 'RelayTypes';
  * operation, and default values are populated for null values.
  */
 function createOperationSelector(
-  operation: ConcreteBatch,
+  request: ConcreteRequest,
   variables: Variables,
 ): OperationSelector {
+  const operation = request.operation;
   const operationVariables = getOperationVariables(operation, variables);
   const dataID = ROOT_ID;
   return {
     fragment: {
       dataID,
-      node: operation.fragment,
+      node: request.fragment,
       variables: operationVariables,
     },
-    node: operation,
+    node: request,
     root: {
       dataID,
-      node: operation.query,
+      node: operation,
       variables: operationVariables,
     },
     variables: operationVariables,

@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails oncall+relay
  * @format
@@ -14,16 +12,18 @@
 
 jest.dontMock('GraphQLStoreChangeEmitter').mock('relayUnstableBatchedUpdates');
 
-const RelayClassic = require('RelayClassic');
-const RelayEnvironment = require('RelayEnvironment');
-const RelayOperationSelector = require('RelayOperationSelector');
-const {ROOT_ID} = require('RelayStoreConstants');
+const RelayClassic = require('../../RelayPublic');
+const RelayEnvironment = require('../RelayEnvironment');
+const RelayOperationSelector = require('../../environment/RelayOperationSelector');
+const {ROOT_ID} = require('../RelayStoreConstants');
 const RelayTestUtils = require('RelayTestUtils');
-const createRelayQuery = require('createRelayQuery');
-const generateRQLFieldAlias = require('generateRQLFieldAlias');
+const createRelayQuery = require('../../query/createRelayQuery');
+const generateRQLFieldAlias = require('../../query/generateRQLFieldAlias');
 const mapObject = require('mapObject');
-const {graphql, getClassicOperation} = require('RelayGraphQLTag');
-const {createOperationSelector} = require('RelayOperationSelector');
+const {graphql, getClassicOperation} = require('../../query/RelayGraphQLTag');
+const {
+  createOperationSelector,
+} = require('../../environment/RelayOperationSelector');
 
 describe('RelayEnvironment', () => {
   let UserQuery;
@@ -33,7 +33,10 @@ describe('RelayEnvironment', () => {
 
   function setName(id, name) {
     environment.getStoreData().getNodeData()[id].name = name;
-    environment.getStoreData().getChangeEmitter().broadcastChangeForID(id);
+    environment
+      .getStoreData()
+      .getChangeEmitter()
+      .broadcastChangeForID(id);
     jest.runAllTimers();
   }
 
@@ -144,7 +147,7 @@ describe('RelayEnvironment', () => {
       };
       const snapshot = environment.lookup(selector);
       expect(snapshot.data).toEqual({
-        __dataID__: jasmine.any(String),
+        __dataID__: expect.any(String),
         feedback: {
           __dataID__: '123',
           id: '123',
@@ -159,7 +162,7 @@ describe('RelayEnvironment', () => {
 
       const disposedSnapshot = environment.lookup(selector);
       expect(disposedSnapshot.data).toEqual({
-        __dataID__: jasmine.any(String),
+        __dataID__: expect.any(String),
         feedback: {
           __dataID__: '123',
           id: '123',
@@ -178,13 +181,13 @@ describe('RelayEnvironment', () => {
       };
       const snapshot = environment.lookup(selector);
       expect(snapshot.data).toEqual({
-        __dataID__: jasmine.any(String),
+        __dataID__: expect.any(String),
         user: {
           __dataID__: '4',
           id: '4',
           name: 'Zuck',
           profilePicture: {
-            __dataID__: jasmine.any(String),
+            __dataID__: expect.any(String),
             uri: 'https://4.jpg',
           },
         },
@@ -287,7 +290,7 @@ describe('RelayEnvironment', () => {
       };
       const snapshot = environment.lookup(selector);
       expect(snapshot.data).toEqual({
-        __dataID__: jasmine.any(String),
+        __dataID__: expect.any(String),
         feedback: {
           __dataID__: '123',
           id: '123',
@@ -303,7 +306,7 @@ describe('RelayEnvironment', () => {
 
       const resolvedSnapshot = environment.lookup(selector);
       expect(resolvedSnapshot.data).toEqual({
-        __dataID__: jasmine.any(String),
+        __dataID__: expect.any(String),
         feedback: {
           __dataID__: '123',
           id: '123',
@@ -329,7 +332,7 @@ describe('RelayEnvironment', () => {
 
       const disposedSnapshot = environment.lookup(selector);
       expect(disposedSnapshot.data).toEqual({
-        __dataID__: jasmine.any(String),
+        __dataID__: expect.any(String),
         feedback: {
           __dataID__: '123',
           id: '123',
@@ -356,13 +359,13 @@ describe('RelayEnvironment', () => {
       expect(callback.mock.calls.length).toBe(1);
       const nextSnapshot = callback.mock.calls[0][0];
       expect(nextSnapshot.data).toEqual({
-        __dataID__: jasmine.any(String),
+        __dataID__: expect.any(String),
         user: {
           __dataID__: '4',
           id: '4',
           name: 'Mark', // updated value
           profilePicture: {
-            __dataID__: jasmine.any(String),
+            __dataID__: expect.any(String),
             uri: 'https://4.jpg',
           },
         },
@@ -506,13 +509,13 @@ describe('RelayEnvironment', () => {
       expect(onError).not.toBeCalled();
       expect(callback.mock.calls.length).toBe(1);
       expect(callback.mock.calls[0][0].data).toEqual({
-        __dataID__: jasmine.any(String),
+        __dataID__: expect.any(String),
         user: {
           __dataID__: '4',
           id: '4',
           name: 'Mark', // Reflects changed value
           profilePicture: {
-            __dataID__: jasmine.any(String),
+            __dataID__: expect.any(String),
             uri: 'https://4.jpg',
           },
         },
@@ -577,7 +580,7 @@ describe('RelayEnvironment', () => {
       const viewerID = recordStore.getDataID('viewer');
       expect(recordStore.getPathToRecord(viewerID).type).toBe('root');
       expect(callback.mock.calls[0][0].data).toEqual({
-        __dataID__: jasmine.any(String),
+        __dataID__: expect.any(String),
         viewer: {
           __dataID__: viewerID,
           actor: {
@@ -694,7 +697,7 @@ describe('RelayEnvironment', () => {
       const viewerID = recordStore.getDataID('viewer');
       expect(recordStore.getPathToRecord(viewerID).type).toBe('root');
       expect(callback.mock.calls[0][0].data).toEqual({
-        __dataID__: jasmine.any(String),
+        __dataID__: expect.any(String),
         viewer: {
           __dataID__: viewerID,
           actor: {
@@ -796,15 +799,15 @@ describe('RelayEnvironment', () => {
 
       // New payload causes selector results to change, has the updated edges
       expect(callback.mock.calls[0][0].data).toEqual({
-        __dataID__: jasmine.any(String),
+        __dataID__: expect.any(String),
         user: {
           __dataID__: '4',
           id: '4',
           friends: {
-            __dataID__: jasmine.any(String),
+            __dataID__: expect.any(String),
             edges: [
               {
-                __dataID__: jasmine.any(String),
+                __dataID__: expect.any(String),
                 node: {
                   // beast -> foo
                   __dataID__: 'foo',
@@ -848,7 +851,7 @@ describe('RelayEnvironment', () => {
           };
         },
       };
-      Query = environment.unstable_internal.getOperation(
+      Query = environment.unstable_internal.getRequest(
         graphql`
           query RelayEnvironmentTestUserQuery($id: ID!, $size: Int) {
             user: node(id: $id) {
@@ -918,7 +921,7 @@ describe('RelayEnvironment', () => {
           __dataID__: '4',
           name: 'Zuck',
           profilePicture: {
-            __dataID__: jasmine.any(String),
+            __dataID__: expect.any(String),
             uri: 'https://4.jpg',
           },
         },
@@ -959,7 +962,7 @@ describe('RelayEnvironment', () => {
           __dataID__: '4',
           name: 'Zuck',
           profilePicture: {
-            __dataID__: jasmine.any(String),
+            __dataID__: expect.any(String),
             uri: 'https://4.jpg',
           },
         },

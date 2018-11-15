@@ -4,7 +4,7 @@ Relay is one of Facebook's open source projects that is both under very active d
 
 ## [Code of Conduct](https://code.facebook.com/codeofconduct)
 
-Facebook has adopted a Code of Conduct that we expect project participants to adhere to. Please read [the full text](https://code.facebook.com/codeofconduct) so that you can understand what actions will and will not be tolerated.
+The code of conduct is described in [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
 
 ## Our Development Process
 
@@ -42,8 +42,7 @@ Facebook has a [bounty program](https://www.facebook.com/whitehat/) for the safe
 
 ## How to Get in Touch
 
-* Discord - [#relay](https://discord.gg/0ZcbPKXt5bX40xsQ) on [Reactiflux](https://www.reactiflux.com/)
-* Stack Overflow - [#relayjs](https://stackoverflow.com/questions/tagged/relayjs)
+If you have a question on how to use Relay, please get in touch with community members through one of the channels listed [here](https://facebook.github.io/relay/en/help.html).
 
 ## Style Guide
 
@@ -63,4 +62,4 @@ We will eventually have a linter that will catch most styling issues that may ex
 
 ## License
 
-By contributing to Relay, you agree that your contributions will be licensed under its BSD license.
+By contributing to Relay, you agree that your contributions will be licensed under its MIT license.

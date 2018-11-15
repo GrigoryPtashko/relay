@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails oncall+relay
  * @format
@@ -12,11 +10,13 @@
 
 'use strict';
 
-jest.mock('RelayQueryTracker').mock('RelayClassicRecordState');
+jest
+  .mock('../../store/RelayQueryTracker')
+  .mock('../../store/RelayClassicRecordState');
 
 require('configureForRelayOSS');
 
-const RelayClassic = require('RelayClassic');
+const Relay = require('../../RelayPublic');
 const RelayTestUtils = require('RelayTestUtils');
 
 describe('writeRelayQueryPayload()', () => {
@@ -28,8 +28,8 @@ describe('writeRelayQueryPayload()', () => {
   beforeEach(() => {
     jest.resetModules();
 
-    RelayRecordStore = require('RelayRecordStore');
-    RelayRecordWriter = require('RelayRecordWriter');
+    RelayRecordStore = require('../../store/RelayRecordStore');
+    RelayRecordWriter = require('../../store/RelayRecordWriter');
   });
 
   describe('plural scalar fields', () => {
@@ -47,7 +47,7 @@ describe('writeRelayQueryPayload()', () => {
       const writer = new RelayRecordWriter(records, {}, false);
       const newEmail = 'user2@example.com';
       const query = getNode(
-        RelayClassic.QL`
+        Relay.QL`
         query {
           node(id:"123") {
             emailAddresses
@@ -86,7 +86,7 @@ describe('writeRelayQueryPayload()', () => {
       const writer = new RelayRecordWriter(records, {}, false);
       const newEmail = 'user2@example.com';
       const query = getNode(
-        RelayClassic.QL`
+        Relay.QL`
         query {
           node(id:"123") {
             emailAddresses
@@ -128,7 +128,7 @@ describe('writeRelayQueryPayload()', () => {
       const writer = new RelayRecordWriter(records, {}, false);
       const newEmail = 'user2@example.com';
       const query = getNode(
-        RelayClassic.QL`
+        Relay.QL`
         query {
           node(id:"123") {
             emailAddresses
@@ -170,7 +170,7 @@ describe('writeRelayQueryPayload()', () => {
       const writer = new RelayRecordWriter(records, {}, false);
 
       const query = getNode(
-        RelayClassic.QL`
+        Relay.QL`
         query {
           node(id:"123") {
             emailAddresses

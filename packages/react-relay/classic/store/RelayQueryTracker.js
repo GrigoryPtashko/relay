@@ -1,26 +1,21 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayQueryTracker
- * @flow
+ * @flow strict-local
  * @format
  */
 
 'use strict';
 
-const RelayNodeInterface = require('RelayNodeInterface');
-const RelayQuery = require('RelayQuery');
+const RelayNodeInterface = require('../interface/RelayNodeInterface');
+const RelayQuery = require('../query/RelayQuery');
 
-const flattenRelayQuery = require('flattenRelayQuery');
+const flattenRelayQuery = require('../traversal/flattenRelayQuery');
 
-import type {DataID} from 'RelayInternalTypes';
-
-const TYPE = '__type__';
+import type {DataID} from 'relay-runtime';
 
 class RelayQueryTracker {
   _trackedNodesByID: {
@@ -35,11 +30,6 @@ class RelayQueryTracker {
   }
 
   trackNodeForID(node: RelayQuery.Node, dataID: DataID): void {
-    // Don't track legacy `__type__` fields
-    if (node instanceof RelayQuery.Field && node.getSchemaName() === TYPE) {
-      return;
-    }
-
     this._trackedNodesByID[dataID] = this._trackedNodesByID[dataID] || {
       trackedNodes: [],
       isMerged: false,

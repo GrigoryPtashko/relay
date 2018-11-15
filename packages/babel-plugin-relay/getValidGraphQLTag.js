@@ -1,12 +1,9 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule getValidGraphQLTag
  * @flow
  * @format
  */
@@ -19,18 +16,14 @@ import type {DocumentNode} from 'graphql';
 
 /**
  * Given a babel AST path to a tagged template literal, return an AST if it is
- * a graphql`` or graphql.experimental`` literal being used in a valid way.
+ * a graphql literal being used in a valid way.
  * If it is some other type of template literal then return nothing.
  */
 function getValidGraphQLTag(path: any): ?DocumentNode {
   const tag = path.get('tag');
 
-  const isGraphQLTag =
-    tag.isIdentifier({name: 'graphql'}) ||
-    tag.matchesPattern('graphql.experimental');
-
-  if (!isGraphQLTag) {
-    return;
+  if (!tag.isIdentifier({name: 'graphql'})) {
+    return null;
   }
 
   const quasis = path.node.quasi.quasis;

@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails oncall+relay
  * @format
@@ -12,14 +10,17 @@
 
 'use strict';
 
-jest.enableAutomock().mock('warning');
-
 require('configureForRelayOSS');
 
-const GraphQLStoreQueryResolver = require('GraphQLStoreQueryResolver');
+jest
+  .mock('warning')
+  .mock('../../route/RelayRoute')
+  .mock('../../legacy/store/GraphQLStoreQueryResolver');
+
+const GraphQLStoreQueryResolver = require('../../legacy/store/GraphQLStoreQueryResolver');
 const React = require('React');
-const RelayClassic = require('RelayClassic');
-const RelayEnvironment = require('RelayEnvironment');
+const RelayClassic = require('../../RelayPublic');
+const RelayEnvironment = require('../../store/RelayEnvironment');
 const RelayTestUtils = require('RelayTestUtils');
 
 describe('RelayContainer', function() {
@@ -94,14 +95,14 @@ describe('RelayContainer', function() {
     expect(MockContainer.displayName).toEqual('Relay(MyComponent)');
   });
 
-  it('defaults to "StatelessComponent" when using a component without name', () => {
+  it('defaults to "Component" when using a component without name', () => {
     mockCreateContainer(() => <span />);
-    expect(MockContainer.displayName).toEqual('Relay(StatelessComponent)');
+    expect(MockContainer.displayName).toEqual('Relay(Component)');
   });
 
-  it('defaults to "ReactElement" when using a ReactElement', () => {
+  it('defaults to "Component" when using a ReactElement', () => {
     mockCreateContainer(<span />);
-    expect(MockContainer.displayName).toEqual('Relay(ReactElement)');
+    expect(MockContainer.displayName).toEqual('Relay(Component)');
   });
 
   it('works with ES6 classes', () => {

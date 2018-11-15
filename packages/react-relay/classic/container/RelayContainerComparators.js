@@ -1,17 +1,16 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayContainerComparators
  * @flow
  * @format
  */
 
 'use strict';
+
+const {isScalarAndEqual} = require('relay-runtime');
 
 /**
  * Compares `objectA` and `objectB` using the provided `isEqual` function.
@@ -52,10 +51,6 @@ function compareObjects(
     }
   }
   return true;
-}
-
-function isScalarAndEqual(valueA, valueB) {
-  return valueA === valueB && (valueA === null || typeof valueA !== 'object');
 }
 
 function isQueryDataEqual(

@@ -1,12 +1,9 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayTypes
  * @flow
  * @format
  */
@@ -16,22 +13,17 @@
 /**
  * Types that Relay framework users may find useful.
  */
-import type {RelayEnvironmentInterface} from 'RelayEnvironment';
-import type RelayFragmentReference from 'RelayFragmentReference';
-import type {
-  DataID,
-  FieldValue,
-  RangeBehaviors,
-  QueryPayload,
-} from 'RelayInternalTypes';
-import type RelayMutation from 'RelayMutation';
-import type RelayMutationRequest from 'RelayMutationRequest';
-import type RelayMutationTransaction from 'RelayMutationTransaction';
-import type {RelayConcreteNode} from 'RelayQL';
-import type {RelayQueryConfigInterface} from 'RelayQueryConfig';
-import type RelayQueryRequest from 'RelayQueryRequest';
-import type {Record} from 'RelayRecord';
+import type RelayMutation from '../mutation/RelayMutation';
+import type RelayMutationTransaction from '../mutation/RelayMutationTransaction';
+import type RelayMutationRequest from '../network/RelayMutationRequest';
+import type RelayQueryRequest from '../network/RelayQueryRequest';
+import type {RelayQueryConfigInterface} from '../query-config/RelayQueryConfig';
+import type RelayFragmentReference from '../query/RelayFragmentReference';
+import type {RelayEnvironmentInterface} from '../store/RelayEnvironment';
+import type {Record} from '../store/RelayRecord';
+import type {FieldValue, QueryPayload} from './RelayInternalTypes';
 import type URI from 'URI';
+import type {DataID, Variables} from 'relay-runtime';
 
 type RelayContainerErrorEventType =
   | 'CACHE_RESTORE_FAILED'
@@ -133,64 +125,12 @@ export type ReadyStateEvent = {
   type: RelayContainerLoadingEventType | RelayContainerErrorEventType,
   error?: Error,
 };
-// Containers
 
-/**
- * FIXME: RelayContainer used to be typed with ReactClass<any>, but
- * ReactClass is broken and allows for access to any property. For example
- * ReactClass<any>.getFragment('foo') is valid even though ReactClass has no
- * such getFragment() type definition. When ReactClass is fixed this causes a
- * lot of errors in Relay code since methods like getFragment() are used often
- * but have no definition in Relay's types. Suppressing for now.
- */
-export type RelayContainer = $FlowFixMe;
-
-export type RelayMutationConfig =
-  | {
-      type: 'FIELDS_CHANGE',
-      fieldIDs: {[fieldName: string]: DataID | Array<DataID>},
-    }
-  | {
-      type: 'RANGE_ADD',
-      parentName?: string,
-      parentID?: string,
-      connectionInfo?: Array<{
-        key: string,
-        filters?: Variables,
-        rangeBehavior: string,
-      }>,
-      connectionName?: string,
-      edgeName: string,
-      rangeBehaviors?: RangeBehaviors,
-    }
-  | {
-      type: 'NODE_DELETE',
-      parentName?: string,
-      parentID?: string,
-      connectionName?: string,
-      deletedIDFieldName: string,
-    }
-  | {
-      type: 'RANGE_DELETE',
-      parentName?: string,
-      parentID?: string,
-      connectionKeys?: Array<{
-        key: string,
-        filters?: Variables,
-      }>,
-      connectionName?: string,
-      deletedIDFieldName: string | Array<string>,
-      pathToConnection: Array<string>,
-    }
-  | {
-      type: 'REQUIRED_CHILDREN',
-      children: Array<RelayConcreteNode>,
-    };
+// Mutations
 export type RelayMutationTransactionCommitCallbacks = {
   onFailure?: ?RelayMutationTransactionCommitFailureCallback,
   onSuccess?: ?RelayMutationTransactionCommitSuccessCallback,
 };
-// Mutations
 export type RelayMutationTransactionCommitFailureCallback = (
   transaction: RelayMutationTransaction,
   preventAutoRollback: () => void,
@@ -254,10 +194,11 @@ export type SubscriptionCallbacks<T> = {
   onError(error: Error): void,
   onCompleted(): void,
 };
-// Variables
-export type Variables = {[name: string]: $FlowFixMe};
-export type RerunParam = {
-  param: string,
-  import: string,
-  max_runs: number,
-};
+
+export type RelayClassicContext = {|
+  environment: RelayEnvironmentInterface,
+  variables: Variables,
+  route: RelayQueryConfigInterface,
+  useFakeData: boolean,
+  query?: empty,
+|};

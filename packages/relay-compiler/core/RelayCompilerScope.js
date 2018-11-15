@@ -1,13 +1,10 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayCompilerScope
- * @flow
+ * @flow strict-local
  * @format
  */
 
@@ -22,7 +19,7 @@ import type {
   ArgumentDefinition,
   ArgumentValue,
   LocalArgumentDefinition,
-} from '../graphql-compiler/GraphQLCompilerPublic';
+} from 'graphql-compiler';
 
 /**
  * A scope is a mapping of the values for each argument defined by the nearest
@@ -76,7 +73,9 @@ export type Scope = {[key: string]: ArgumentValue};
  * assume that this could be overridden at runtime. The value cannot be decided
  * statically and therefore is set to a variable.
  */
-function getRootScope(definitions: Array<LocalArgumentDefinition>): Scope {
+function getRootScope(
+  definitions: $ReadOnlyArray<LocalArgumentDefinition>,
+): Scope {
   const scope = {};
   definitions.forEach(definition => {
     scope[definition.name] = {
@@ -130,9 +129,10 @@ function getRootScope(definitions: Array<LocalArgumentDefinition>): Scope {
  * }
  */
 function getFragmentScope(
-  definitions: Array<ArgumentDefinition>,
-  args: Array<Argument>,
+  definitions: $ReadOnlyArray<ArgumentDefinition>,
+  args: $ReadOnlyArray<Argument>,
   parentScope: Scope,
+  fragmentName: string,
 ): Scope {
   const argMap = {};
   args.forEach(arg => {
@@ -148,10 +148,11 @@ function getFragmentScope(
     if (definition.kind === 'RootArgumentDefinition') {
       invariant(
         !argMap.hasOwnProperty(definition.name),
-        'RelayCompilerScope: Unexpected argument for global variable `%s`. ' +
-          '@arguments may only be provided for variables defined in the ' +
-          "fragment's @argumentDefinitions list.",
+        'RelayCompilerScope: Unexpected argument for global variable `%s` ' +
+          'for `%s`. @arguments may only be provided for variables ' +
+          "defined in the fragment's @argumentDefinitions list.",
         definition.name,
+        fragmentName,
       );
       fragmentScope[definition.name] = {
         kind: 'Variable',
@@ -166,9 +167,10 @@ function getFragmentScope(
           definition.defaultValue != null ||
             !(definition.type instanceof GraphQLNonNull),
           'RelayCompilerScope: No value found for required argument ' +
-            '`$%s: %s`.',
+            '`$%s: %s` in `%s`.',
           definition.name,
           definition.type.toString(),
+          fragmentName,
         );
         fragmentScope[definition.name] = {
           kind: 'Literal',

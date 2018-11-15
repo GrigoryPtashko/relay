@@ -1,24 +1,27 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayCompatContainer
  * @flow
  * @format
  */
 
 'use strict';
 
-const ReactRelayFragmentContainer = require('ReactRelayFragmentContainer');
+const React = require('React');
+const ReactRelayFragmentContainer = require('../../modern/ReactRelayFragmentContainer');
 
-const {buildCompatContainer} = require('ReactRelayCompatContainerBuilder');
+const {buildCompatContainer} = require('../ReactRelayCompatContainerBuilder');
 
-import type {GeneratedNodeMap} from 'ReactRelayTypes';
-import type {GraphQLTaggedNode} from 'RelayModernGraphQLTag';
+import type {
+  $RelayProps,
+  GeneratedNodeMap,
+  RelayProp,
+} from '../../modern/ReactRelayTypes';
+import type {RelayCompatContainer} from './RelayCompatTypes';
+import type {GraphQLTaggedNode} from 'relay-runtime';
 
 /**
  * Wrap the basic `createContainer()` function with logic to adapt to the
@@ -27,13 +30,12 @@ import type {GraphQLTaggedNode} from 'RelayModernGraphQLTag';
  * `fragmentSpec` is memoized once per environment, rather than once per
  * instance of the container constructed/rendered.
  */
-function createContainer<TBase: React$ComponentType<*>>(
-  Component: TBase,
+function createContainer<Props: {}, TComponent: React.ComponentType<Props>>(
+  Component: TComponent,
   fragmentSpec: GraphQLTaggedNode | GeneratedNodeMap,
-  /* $FlowFixMe(>=0.53.0) This comment suppresses an error
- * when upgrading Flow's support for React. Common errors found when upgrading
- * Flow's React support are documented at https://fburl.com/eq7bs81w */
-): TBase & {getFragment: Function} {
+): RelayCompatContainer<
+  $RelayProps<React$ElementConfig<TComponent>, RelayProp>,
+> {
   return buildCompatContainer(
     Component,
     (fragmentSpec: any),

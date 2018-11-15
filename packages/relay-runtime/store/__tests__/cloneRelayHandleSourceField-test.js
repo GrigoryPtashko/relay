@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails oncall+relay
  * @format
@@ -12,14 +10,11 @@
 
 'use strict';
 
-const RelayConcreteNode = require('RelayConcreteNode');
-const RelayModernTestUtils = require('RelayModernTestUtils');
+const cloneRelayHandleSourceField = require('../cloneRelayHandleSourceField');
+const getRelayHandleKey = require('../../util/getRelayHandleKey');
 
-const cloneRelayHandleSourceField = require('cloneRelayHandleSourceField');
-const getRelayHandleKey = require('getRelayHandleKey');
-
-const {generateWithTransforms, matchers} = RelayModernTestUtils;
-const {LINKED_FIELD, LINKED_HANDLE} = RelayConcreteNode;
+const {LINKED_FIELD, LINKED_HANDLE} = require('../../util/RelayConcreteNode');
+const {generateWithTransforms, matchers} = require('RelayModernTestUtils');
 
 describe('cloneRelayHandleSourceField()', () => {
   let selections;

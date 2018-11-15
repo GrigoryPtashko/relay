@@ -1,0 +1,114 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`RelayMatchTransform matches expected output: invalid-match-type.graphql 1`] = `
+~~~~~~~~~~ INPUT ~~~~~~~~~~
+fragment CommentBody_comment on Comment {
+  commentBody @match(onTypes: [
+    {
+      fragment: "MarkdownBody_comment"
+      module: "MarkdownBodyComponent.react"
+    },
+    {
+      fragment: "User_comment"
+      module: "User.react"
+    },
+  ])
+}
+
+fragment MarkdownBody_comment on MarkdownCommentBody {
+  __typename
+}
+
+fragment User_comment on User {
+  __typename
+}
+
+~~~~~~~~~~ OUTPUT ~~~~~~~~~~
+THROWN EXCEPTION:
+
+Error: RelayMatchTransform: Unsupported type 'User' in the list of matches in the @match. Type "User" does not belong to the union "CommentBody".
+`;
+
+exports[`RelayMatchTransform matches expected output: invalid-no-matches.graphql 1`] = `
+~~~~~~~~~~ INPUT ~~~~~~~~~~
+fragment CommentBody_comment on Comment {
+  commentBody @match(onTypes: [])
+}
+
+~~~~~~~~~~ OUTPUT ~~~~~~~~~~
+THROWN EXCEPTION:
+
+Error: RelayMatchTransform: The @match directive requires at least one type to match on.
+`;
+
+exports[`RelayMatchTransform matches expected output: invalid-non-empty-selections.graphql 1`] = `
+~~~~~~~~~~ INPUT ~~~~~~~~~~
+fragment CommentBody_comment on Comment {
+  commentBody @match(onTypes: [
+    {
+      fragment: "MarkdownBody_comment"
+      module: "MarkdownBodyComponent.react"
+    },
+    {
+      fragment: "PlaintextBody_comment"
+      module: "PlaintextComponent.react"
+    },
+  ]) {
+    __typename
+  }
+}
+
+fragment MarkdownBody_comment on MarkdownCommentBody {
+  __typename
+}
+
+fragment PlaintextBody_comment on PlainCommentBody {
+  __typename
+}
+
+~~~~~~~~~~ OUTPUT ~~~~~~~~~~
+THROWN EXCEPTION:
+
+Error: GraphQLParser: When using the @match directive, no selections should be defined on the field 'commentBody'.
+`;
+
+exports[`RelayMatchTransform matches expected output: relay-match-transform.graphql 1`] = `
+~~~~~~~~~~ INPUT ~~~~~~~~~~
+fragment CommentBody_comment on Comment {
+  commentBody @match(onTypes: [
+    {
+      fragment: "MarkdownBody_comment"
+      module: "MarkdownBodyComponent.react"
+    },
+    {
+      fragment: "PlaintextBody_comment"
+      module: "PlaintextComponent.react"
+    },
+  ])
+}
+
+fragment MarkdownBody_comment on MarkdownCommentBody {
+  __typename
+}
+
+fragment PlaintextBody_comment on PlainCommentBody {
+  __typename
+}
+
+~~~~~~~~~~ OUTPUT ~~~~~~~~~~
+fragment CommentBody_comment on Comment {
+  commentBody(supported: ["MarkdownCommentBody", "PlainCommentBody"]) {
+    ...MarkdownBody_comment
+    ...PlaintextBody_comment
+  }
+}
+
+fragment MarkdownBody_comment on MarkdownCommentBody {
+  __typename
+}
+
+fragment PlaintextBody_comment on PlainCommentBody {
+  __typename
+}
+
+`;

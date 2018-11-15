@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @emails oncall+relay
  * @format
@@ -12,7 +10,7 @@
 
 'use strict';
 
-const RelayProfiler = require('RelayProfiler');
+const RelayProfiler = require('../RelayProfiler');
 
 describe('RelayProfiler', function() {
   const DEV = __DEV__;
@@ -53,6 +51,19 @@ describe('RelayProfiler', function() {
       const actualReturnValue = mockObject.mockMethod(expectedArgument);
 
       expect(actualReturnValue).toBe(expectedReturnValue);
+    });
+
+    it('does not create wrapper methods unless they exist on the instance', () => {
+      class Container {
+        methodThatExists() {}
+      }
+      RelayProfiler.instrumentMethods(Container.prototype, {
+        methodThatExists: 'Container.prototype.methodThatExists',
+        methodThatDoesNotExist: 'Container.prototype.methodThatDoesNotExist',
+      });
+      const container = new Container();
+      expect(typeof container.methodThatExists).toBe('function');
+      expect(typeof container.methodThatDoesNotExist).toBe('undefined');
     });
 
     it('invokes attached handlers', () => {
@@ -301,7 +312,22 @@ describe('RelayProfiler', function() {
 
       expect(mockStart).toBeCalledWith('mockBehavior', state);
       expect(mockStop).toBeCalled();
-      expect(mockStop.mock.calls[0].length).toBe(0);
+      expect(mockStop.mock.calls[0].length).toBe(1);
+      expect(mockStop.mock.calls[0][0]).toEqual(undefined);
+    });
+
+    it('passes error to each stop handler', () => {
+      const mockStop = jest.fn();
+      const mockStart = jest.fn(() => mockStop);
+      const state = {};
+
+      RelayProfiler.attachProfileHandler('mockBehavior', mockStart);
+      const profiler = RelayProfiler.profile('mockBehavior', state);
+      const error = new Error();
+      profiler.stop(error);
+
+      expect(mockStart).toBeCalledWith('mockBehavior', state);
+      expect(mockStop).toBeCalledWith(error);
     });
   });
 });

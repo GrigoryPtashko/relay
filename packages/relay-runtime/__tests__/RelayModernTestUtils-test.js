@@ -1,10 +1,8 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
  * @format
  * @emails oncall+relay
@@ -19,11 +17,12 @@ describe('RelayModernTestUtils', () => {
     // Define custom matchers to test our custom matchers...
     expect.extend({
       toFail(actual, expected) {
+        const actualMessage = actual.message();
         if (actual.pass) {
           if (expected) {
             return {
               pass: false,
-              message:
+              message: () =>
                 'Expected matcher to fail with message: ' +
                 JSON.stringify(expected) +
                 ' but it passed.',
@@ -31,28 +30,28 @@ describe('RelayModernTestUtils', () => {
           } else {
             return {
               pass: false,
-              message: 'Expected matcher to fail but it passed.',
+              message: () => 'Expected matcher to fail but it passed.',
             };
           }
         } else if (expected instanceof RegExp) {
-          if (!actual.message.match(expected)) {
+          if (!actualMessage.match(expected)) {
             return {
               pass: false,
-              message:
+              message: () =>
                 'Expected matcher to fail with message matching: ' +
                 expected.toString() +
                 ' but it failed with message: ' +
-                JSON.stringify(actual.message),
+                JSON.stringify(actualMessage),
             };
           }
-        } else if (expected && actual.message !== expected) {
+        } else if (expected && actualMessage !== expected) {
           return {
             pass: false,
-            message:
+            message: () =>
               'Expected matcher to fail with message: ' +
               JSON.stringify(expected) +
               ' but it failed with message: ' +
-              JSON.stringify(actual.message),
+              JSON.stringify(actualMessage),
           };
         }
         return {pass: true};
@@ -64,9 +63,9 @@ describe('RelayModernTestUtils', () => {
         } else {
           return {
             pass: false,
-            message:
+            message: () =>
               'Expected matcher to pass but it failed with message: ' +
-              JSON.stringify(actual.message),
+              JSON.stringify(actual.message()),
           };
         }
       },

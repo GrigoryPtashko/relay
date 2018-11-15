@@ -1,38 +1,38 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule writeRelayUpdatePayload
  * @flow
  * @format
  */
 
 'use strict';
 
-const GraphQLMutatorConstants = require('GraphQLMutatorConstants');
-const RelayClassicRecordState = require('RelayClassicRecordState');
-const RelayMutationTracker = require('RelayMutationTracker');
-const RelayMutationType = require('RelayMutationType');
-const RelayNodeInterface = require('RelayNodeInterface');
-const RelayProfiler = require('RelayProfiler');
-const RelayQuery = require('RelayQuery');
-const RelayQueryPath = require('RelayQueryPath');
+const RelayClassicRecordState = require('../store/RelayClassicRecordState');
+const RelayMutationTracker = require('../store/RelayMutationTracker');
+const RelayNodeInterface = require('../interface/RelayNodeInterface');
+const RelayQuery = require('../query/RelayQuery');
+const RelayQueryPath = require('../query/RelayQueryPath');
 
-const generateClientEdgeID = require('generateClientEdgeID');
-const generateClientID = require('generateClientID');
-const getRangeBehavior = require('getRangeBehavior');
+const generateClientEdgeID = require('../legacy/store/generateClientEdgeID');
+const generateClientID = require('../legacy/store/generateClientID');
+const getRangeBehavior = require('../mutation/getRangeBehavior');
 const invariant = require('invariant');
 const warning = require('warning');
 
-const {ConnectionInterface} = require('RelayRuntime');
+const {
+  ConnectionInterface,
+  MutationTypes,
+  RangeOperations,
+  RelayProfiler,
+} = require('relay-runtime');
 
-import type {DataID, UpdateOptions} from 'RelayInternalTypes';
-import type RelayQueryWriter from 'RelayQueryWriter';
-import type RelayRecordStore from 'RelayRecordStore';
+import type RelayQueryWriter from '../store/RelayQueryWriter';
+import type RelayRecordStore from '../store/RelayRecordStore';
+import type {UpdateOptions} from '../tools/RelayInternalTypes';
+import type {DataID} from 'relay-runtime';
 
 // TODO: Replace with enumeration for possible config types.
 /* OperationConfig was originally typed such that each property had the type
@@ -45,7 +45,7 @@ type PayloadArray = Array<Payload>;
 type PayloadObject = {[key: string]: Payload};
 
 const {ANY_TYPE, ID, NODE} = RelayNodeInterface;
-const {APPEND, IGNORE, PREPEND, REFETCH, REMOVE} = GraphQLMutatorConstants;
+const {APPEND, IGNORE, PREPEND, REFETCH, REMOVE} = RangeOperations;
 
 let _edgesField;
 function getEdgesField() {
@@ -78,17 +78,17 @@ function writeRelayUpdatePayload(
 ): void {
   configs.forEach(config => {
     switch (config.type) {
-      case RelayMutationType.NODE_DELETE:
+      case MutationTypes.NODE_DELETE:
         handleNodeDelete(writer, payload, config);
         break;
-      case RelayMutationType.RANGE_ADD:
+      case MutationTypes.RANGE_ADD:
         handleRangeAdd(writer, payload, operation, config, isOptimisticUpdate);
         break;
-      case RelayMutationType.RANGE_DELETE:
+      case MutationTypes.RANGE_DELETE:
         handleRangeDelete(writer, payload, config);
         break;
-      case RelayMutationType.FIELDS_CHANGE:
-      case RelayMutationType.REQUIRED_CHILDREN:
+      case MutationTypes.FIELDS_CHANGE:
+      case MutationTypes.REQUIRED_CHILDREN:
         break;
       default:
         console.error(
@@ -448,17 +448,28 @@ function addRangeNode(
   );
 
   // append/prepend the item to the range.
-  if (rangeBehavior in GraphQLMutatorConstants.RANGE_OPERATIONS) {
-    recordWriter.applyRangeUpdate(connectionID, edgeID, (rangeBehavior: any));
+  if (
+    rangeBehavior === APPEND ||
+    rangeBehavior === IGNORE ||
+    rangeBehavior === PREPEND ||
+    rangeBehavior === REFETCH ||
+    rangeBehavior === REMOVE
+  ) {
+    recordWriter.applyRangeUpdate(
+      connectionID,
+      edgeID,
+      (rangeBehavior: $FlowFixMe),
+    );
     writer.recordUpdate(connectionID);
   } else {
     console.error(
       'writeRelayUpdatePayload(): invalid range operation `%s`, valid ' +
-        'options are `%s`, `%s`, `%s`, or `%s`.',
+        'options are `%s`, `%s`, `%s`, `%s`, or `%s`.',
       rangeBehavior,
       APPEND,
       PREPEND,
       IGNORE,
+      REMOVE,
       REFETCH,
     );
   }

@@ -1,12 +1,9 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayFragmentSpecResolver
  * @flow
  * @format
  */
@@ -15,25 +12,24 @@
 
 const forEachObject = require('forEachObject');
 const invariant = require('invariant');
-const isScalarAndEqual = require('isScalarAndEqual');
 
-const {areEqualSelectors, getSelectorsFromObject} = require('RelaySelector');
+const {areEqualSelectors, getSelectorsFromObject} = require('./RelaySelector');
+const {isScalarAndEqual} = require('relay-runtime');
 
 import type {
-  Disposable,
   FragmentSpecResolver,
   FragmentSpecResults,
   Props,
   SelectorData,
-} from 'RelayCombinedEnvironmentTypes';
+} from './RelayCombinedEnvironmentTypes';
 import type {
   Environment,
   FragmentMap,
   RelayContext,
   Selector,
   Snapshot,
-} from 'RelayEnvironmentTypes';
-import type {Variables} from 'RelayTypes';
+} from './RelayEnvironmentTypes';
+import type {Disposable, Variables} from 'relay-runtime';
 
 type Resolvers = {[key: string]: ?(SelectorListResolver | SelectorResolver)};
 
@@ -50,7 +46,7 @@ type Resolvers = {[key: string]: ?(SelectorListResolver | SelectorResolver)};
  * recomputed the first time `resolve()` is called.
  */
 class RelayFragmentSpecResolver implements FragmentSpecResolver {
-  _callback: () => void;
+  _callback: ?() => void;
   _context: RelayContext;
   _data: Object;
   _fragments: FragmentMap;
@@ -62,7 +58,7 @@ class RelayFragmentSpecResolver implements FragmentSpecResolver {
     context: RelayContext,
     fragments: FragmentMap,
     props: Props,
-    callback: () => void,
+    callback?: () => void,
   ) {
     this._callback = callback;
     this._context = context;
@@ -106,6 +102,10 @@ class RelayFragmentSpecResolver implements FragmentSpecResolver {
       this._stale = false;
     }
     return this._data;
+  }
+
+  setCallback(callback: () => void): void {
+    this._callback = callback;
   }
 
   setProps(props: Props): void {
@@ -169,8 +169,14 @@ class RelayFragmentSpecResolver implements FragmentSpecResolver {
 
   _onChange = (): void => {
     this._stale = true;
-    this._callback();
+    if (typeof this._callback === 'function') {
+      this._callback();
+    }
   };
+
+  isLoading(): boolean {
+    return false;
+  }
 }
 
 /**

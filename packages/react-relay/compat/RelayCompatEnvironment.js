@@ -1,29 +1,26 @@
 /**
- * Copyright (c) 2013-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  *
- * @providesModule RelayCompatEnvironment
  * @flow
  * @format
  */
 
 'use strict';
 
-const isClassicRelayEnvironment = require('isClassicRelayEnvironment');
+const isClassicRelayEnvironment = require('../classic/store/isClassicRelayEnvironment');
 
-const {isRelayModernEnvironment} = require('RelayRuntime');
+const {isRelayModernEnvironment} = require('relay-runtime');
 
-import type {CompatEnvironment} from 'RelayCompatTypes';
-import type {RelayEnvironmentInterface} from 'RelayEnvironment';
-import type {Environment} from 'RelayStoreTypes';
+import type {RelayEnvironmentInterface} from '../classic/store/RelayEnvironment';
+import type {CompatEnvironment} from './react/RelayCompatTypes';
+import type {IEnvironment} from 'relay-runtime';
 
 function getRelayModernEnvironment(
   environment: CompatEnvironment,
-): ?Environment {
+): ?IEnvironment {
   if (isRelayModernEnvironment(environment)) {
     return (environment: any);
   }
