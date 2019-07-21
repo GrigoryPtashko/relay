@@ -32,6 +32,7 @@ export type RelayProp = {
 export type RelayPaginationProp = {|
   +environment: IEnvironment,
   +hasMore: () => boolean,
+  +revHasMore: () => boolean,
   +isLoading: () => boolean,
   +loadMore: (
     pageSize: number,

@@ -73,7 +73,12 @@ export type ConnectionConfig = {
   getFragmentVariables?: FragmentVariablesGetter,
   getVariables: (
     props: Object,
-    paginationInfo: {count: number, cursor: ?string},
+    paginationInfo: {
+      count: ?number,
+      cursor: ?string,
+      revCount: ?number,
+      revCursor: ?string,
+    },
     fragmentVariables: Variables,
   ) => Variables,
   query: GraphQLTaggedNode,
@@ -459,6 +464,7 @@ function createContainerWithFragments<
     _buildRelayProp(relayContext: RelayContext): RelayPaginationProp {
       return {
         hasMore: this._hasMore,
+        revHasMore: this._revHasMore,
         isLoading: this._isLoading,
         loadMore: this._loadMore,
         refetchConnection: this._refetchConnection,
@@ -474,9 +480,12 @@ function createContainerWithFragments<
     };
 
     _getConnectionData(): ?{
+      cursor: string,
       cursor: ?string,
+      revCursor: ?string,
       edgeCount: number,
       hasMore: boolean,
+      revHasMore: ?boolean,
     } {
       // Extract connection data and verify there are more edges to fetch
       const {componentRef: _, ...restProps} = this.props;
@@ -527,12 +536,20 @@ function createContainerWithFragments<
         PAGE_INFO,
         pageInfo,
       );
+
       const hasMore =
         direction === FORWARD
           ? pageInfo[HAS_NEXT_PAGE]
           : pageInfo[HAS_PREV_PAGE];
+      const revHasMore =
+        direction === FORWARD
+          ? pageInfo[HAS_PREV_PAGE]
+          : pageInfo[HAS_NEXT_PAGE];
+
       const cursor =
         direction === FORWARD ? pageInfo[END_CURSOR] : pageInfo[START_CURSOR];
+      const revCursor =
+        direction === FORWARD ? pageInfo[START_CURSOR] : pageInfo[END_CURSOR];
       if (
         typeof hasMore !== 'boolean' ||
         (edges.length !== 0 && typeof cursor === 'undefined')
@@ -552,8 +569,10 @@ function createContainerWithFragments<
       }
       return {
         cursor,
+        revCursor,
         edgeCount: edges.length,
         hasMore,
+        revHasMore,
       };
     }
 
@@ -564,6 +583,11 @@ function createContainerWithFragments<
         connectionData.hasMore &&
         connectionData.cursor
       );
+    };
+
+    _revHasMore = (): boolean => {
+      const connectionData = this._getConnectionData();
+      return !!connectionData && !!connectionData.revHasMore;
     };
 
     _isLoading = (): boolean => {
@@ -583,7 +607,9 @@ function createContainerWithFragments<
       this._refetchVariables = refetchVariables;
       const paginatingVariables = {
         count: totalCount,
+        revCount: null,
         cursor: null,
+        revCursor: null,
         totalCount,
       };
       const fetch = this._fetchPage(
@@ -612,6 +638,11 @@ function createContainerWithFragments<
         Observable.create(sink => sink.complete()).subscribe(observer);
         return null;
       }
+      let reverseMore = false;
+      if (pageSize < 0) {
+        pageSize = -1 * pageSize;
+        reverseMore = true;
+      }
       const totalCount = connectionData.edgeCount + pageSize;
       if (options && options.force) {
         return this._refetchConnection(totalCount, observerOrCallback);
@@ -625,8 +656,10 @@ function createContainerWithFragments<
         cursor,
       );
       const paginatingVariables = {
-        count: pageSize,
-        cursor: cursor,
+        count: !reverseMore ? pageSize : null,
+        revCount: !reverseMore ? null : pageSize,
+        cursor: !reverseMore ? cursor : null,
+        revCursor: !reverseMore ? null : connectionData.revCursor,
         totalCount,
       };
       const fetch = this._fetchPage(paginatingVariables, observer, options);
@@ -660,8 +693,10 @@ function createContainerWithFragments<
 
     _fetchPage(
       paginatingVariables: {
-        count: number,
+        count: ?number,
+        revCount: ?number,
         cursor: ?string,
+        revCursor: ?string,
         totalCount: number,
       },
       observer: Observer<void>,
@@ -713,7 +748,9 @@ function createContainerWithFragments<
         props,
         {
           count: paginatingVariables.count,
+          revCount: paginatingVariables.revCount,
           cursor: paginatingVariables.cursor,
+          revCursor: paginatingVariables.revCursor,
         },
         fragmentVariables,
       );
